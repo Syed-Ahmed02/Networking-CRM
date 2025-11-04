@@ -48,9 +48,9 @@ export function AppSidebar() {
   const pathname = usePathname()
 
   return (
-    <Sidebar>
-      <SidebarHeader className="flex h-16 items-center border-b px-6 justify-center">
-        <h1 className="text-xl font-bold">NetworkCRM</h1>
+    <Sidebar >
+      <SidebarHeader className="flex h-16 items-center border-b px-6 justify-center text-2xl font-bold">
+        NetworkCRM
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>

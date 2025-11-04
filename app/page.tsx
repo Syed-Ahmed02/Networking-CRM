@@ -1,5 +1,12 @@
 import { redirect } from "next/navigation"
-
+import { Hero } from "@/components/sections/Hero"
 export default function HomePage() {
-  redirect("/dashboard")
+
+  return (
+    <div className="min-h-screen bg-background/10">
+      <div className="mx-auto max-w-7xl">
+        <Hero />
+      </div>
+    </div>
+  )
 }
