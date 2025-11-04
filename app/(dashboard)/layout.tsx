@@ -2,16 +2,21 @@ import type React from "react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AppTopbar } from "@/components/app-topbar"
 
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen">
+    <SidebarProvider>
       <AppSidebar />
-      <AppTopbar />
-      <main className="ml-64 mt-16 p-6">{children}</main>
-    </div>
+      <SidebarInset>
+        <AppTopbar />
+        <main className="mt-16 p-6">{children}</main>
+      </SidebarInset>
+    </SidebarProvider>
   )
 }
+
+

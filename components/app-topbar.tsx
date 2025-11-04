@@ -13,16 +13,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 
 export function AppTopbar() {
   const { theme, setTheme } = useTheme()
 
   return (
-    <header className="fixed left-64 right-0 top-0 z-30 flex h-16 items-center justify-between border-b bg-background px-6">
-      {/* Search */}
-      <div className="relative w-96">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input type="search" placeholder="Search contacts, companies..." className="pl-9" />
+    <header className="fixed w-full top-0 z-30 flex h-16 items-center justify-between border-b bg-background px-6">
+      <div className="flex items-center gap-4">
+        <SidebarTrigger />
+        {/* Search */}
+        <div className="relative w-96">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input type="search" placeholder="Search contacts, companies..." className="pl-9" />
+        </div>
       </div>
 
       {/* Right side */}

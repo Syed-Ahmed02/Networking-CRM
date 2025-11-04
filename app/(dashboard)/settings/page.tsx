@@ -9,39 +9,34 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 
 export default function SettingsPage() {
   const [isApolloConnected, setIsApolloConnected] = useState(false)
   const [isGoogleConnected, setIsGoogleConnected] = useState(false)
-  const { toast } = useToast()
 
   const handleSaveProfile = () => {
-    toast({
-      title: "Profile updated",
+    toast("Profile updated",{
       description: "Your profile settings have been saved successfully",
     })
   }
 
   const handleConnectApollo = () => {
     setIsApolloConnected(true)
-    toast({
-      title: "Apollo connected",
+    toast("Apollo connected",{
       description: "Your Apollo account has been connected successfully",
     })
   }
 
   const handleConnectGoogle = () => {
     setIsGoogleConnected(true)
-    toast({
-      title: "Google Calendar connected",
+    toast("Google Calendar connected",{
       description: "Your Google Calendar has been connected successfully",
     })
   }
 
   const handleImportCSV = () => {
-    toast({
-      title: "Import started",
+    toast("Import started",{
       description: "Your CSV file is being processed",
     })
   }

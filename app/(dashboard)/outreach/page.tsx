@@ -9,8 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useToast } from "@/hooks/use-toast"
-
+import { toast } from "sonner"
 type SearchResult = {
   id: string
   name: string
@@ -107,14 +106,11 @@ export default function OutreachPage() {
   const [isSearching, setIsSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
-  const { toast } = useToast()
 
   const handleSearch = () => {
     if (!searchQuery.trim()) {
-      toast({
-        title: "Search query required",
+      toast("Search query required",{
         description: "Please enter a company name to search",
-        variant: "destructive",
       })
       return
     }
@@ -131,16 +127,14 @@ export default function OutreachPage() {
   }
 
   const handleAddToContacts = (result: SearchResult) => {
-    toast({
-      title: "Contact added",
+    toast("Contact added",{
       description: `${result.name} has been added to your contacts`,
     })
   }
 
   const handleCopyMessage = (message: string) => {
     navigator.clipboard.writeText(message)
-    toast({
-      title: "Message copied",
+    toast("Message copied",{
       description: "The outreach message has been copied to your clipboard",
     })
   }
