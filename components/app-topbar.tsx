@@ -14,10 +14,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-
 export function AppTopbar() {
   const { theme, setTheme } = useTheme()
-
   return (
     <header className="fixed w-full top-0 z-30 flex h-16 items-center justify-between border-b bg-background px-6">
       <div className="flex items-center gap-4">
