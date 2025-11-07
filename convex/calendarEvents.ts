@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthUserId } from "./helpers";
+import type { Doc } from "./_generated/dataModel";
 
 // Query: Get all calendar events for the current user
 export const list = query({
@@ -166,7 +167,7 @@ export const update = mutation({
       }
     }
 
-    const updates: any = {
+    const updates: Partial<Doc<"calendarEvents">> = {
       updatedAt: Date.now(),
     };
 

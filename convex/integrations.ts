@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthUserId } from "./helpers";
+import type { Doc } from "./_generated/dataModel";
 
 // Query: Get all integrations for the current user
 export const list = query({
@@ -89,7 +90,7 @@ export const upsert = mutation({
 
     if (existing) {
       // Update existing integration
-      const updates: any = {
+      const updates: Partial<Doc<"integrations">> = {
         updatedAt: now,
         connected: true,
         connectedAt: existing.connectedAt || now,
@@ -140,7 +141,7 @@ export const update = mutation({
       throw new Error("Integration not found or unauthorized");
     }
 
-    const updates: any = {
+    const updates: Partial<Doc<"integrations">> = {
       updatedAt: Date.now(),
     };
 

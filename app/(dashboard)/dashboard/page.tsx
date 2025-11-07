@@ -1,95 +1,106 @@
+import { fetchQuery } from "convex/nextjs"
+import { api } from "@/convex/_generated/api"
+import type { Doc } from "@/convex/_generated/dataModel"
+import { auth } from "@clerk/nextjs/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Bell, TrendingUp, Users, Calendar } from "lucide-react"
 
-const recommendations = [
-  {
-    id: 1,
-    contact: "Sarah Johnson",
-    company: "TechCorp",
-    action: "Follow up on proposal discussion",
-    priority: "high",
-    daysAgo: 3,
-  },
-  {
-    id: 2,
-    contact: "Michael Chen",
-    company: "StartupXYZ",
-    action: "Schedule demo call",
-    priority: "medium",
-    daysAgo: 5,
-  },
-  {
-    id: 3,
-    contact: "Emily Rodriguez",
-    company: "Enterprise Inc",
-    action: "Send quarterly report",
-    priority: "low",
-    daysAgo: 7,
-  },
-]
+type ContactWithDetails = Doc<"contacts"> & {
+  primaryEmail?: string | null
+  primaryPhone?: string | null
+}
 
-const recentActivity = [
-  {
-    id: 1,
-    contact: "David Park",
-    company: "Innovation Labs",
-    action: "Meeting completed",
-    time: "2 hours ago",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-  {
-    id: 2,
-    contact: "Lisa Wang",
-    company: "Global Solutions",
-    action: "Email sent",
-    time: "5 hours ago",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-  {
-    id: 3,
-    contact: "James Miller",
-    company: "Tech Ventures",
-    action: "Contact added",
-    time: "1 day ago",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-]
+export default async function DashboardPage() {
+  const authState = await auth()
+  const token = await authState.getToken({ template: "convex" })
+  const fetchOptions = token ? { token } : undefined
 
-const stats = [
-  {
-    title: "Total Contacts",
-    value: "248",
-    change: "+12%",
-    icon: Users,
-  },
-  {
-    title: "Meetings This Week",
-    value: "12",
-    change: "+3",
-    icon: Calendar,
-  },
-  {
-    title: "Response Rate",
-    value: "68%",
-    change: "+5%",
-    icon: TrendingUp,
-  },
-  {
-    title: "Pending Follow-ups",
-    value: "8",
-    change: "-2",
-    icon: Bell,
-  },
-]
+  const [contacts, followUps, recentActivity, events, outreachMessages] = await Promise.all([
+    fetchQuery(api.contacts.list, { stage: undefined }, fetchOptions),
+    fetchQuery(api.followUpRecommendations.getActive, {}, fetchOptions),
+    fetchQuery(api.activityLog.getRecent, { limit: 6 }, fetchOptions),
+    fetchQuery(api.calendarEvents.list, { date: undefined, contactId: undefined }, fetchOptions),
+    fetchQuery(api.outreach.listMessages, { sent: undefined, contactId: undefined }, fetchOptions),
+  ])
 
-export default function DashboardPage() {
+  const contactMap = new Map<string, ContactWithDetails>()
+  for (const contact of contacts as ContactWithDetails[]) {
+    contactMap.set(contact._id, contact)
+  }
+
+  const now = new Date()
+  const startOfWeek = (() => {
+    const date = new Date(now)
+    const day = date.getDay()
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1)
+    date.setDate(diff)
+    date.setHours(0, 0, 0, 0)
+    return date
+  })()
+  const endOfWeek = (() => {
+    const date = new Date(startOfWeek)
+    date.setDate(date.getDate() + 6)
+    date.setHours(23, 59, 59, 999)
+    return date
+  })()
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime()
+
+  const totalContacts = contacts.length
+  const newContactsThisMonth = contacts.filter((contact) => contact.createdAt >= startOfMonth).length
+  const meetingsThisWeek = events.filter((event) => {
+    const eventDate = new Date(`${event.date}T00:00:00`)
+    return eventDate >= startOfWeek && eventDate <= endOfWeek
+  }).length
+  const upcomingMeetings = events.filter((event) => new Date(`${event.date}T${event.time}`) >= now).length
+  const totalMessages = outreachMessages.length
+  const sentMessages = outreachMessages.filter((message) => message.sent).length
+  const responseRate = totalMessages > 0 ? Math.round((sentMessages / totalMessages) * 100) : 0
+  const pendingFollowUps = followUps.length
+
+  const stats = [
+    {
+      title: "Total Contacts",
+      value: totalContacts.toString(),
+      change: `${newContactsThisMonth} new this month`,
+      icon: Users,
+    },
+    {
+      title: "Meetings This Week",
+      value: meetingsThisWeek.toString(),
+      change: `${upcomingMeetings} upcoming`,
+      icon: Calendar,
+    },
+    {
+      title: "Response Rate",
+      value: `${responseRate}%`,
+      change: `${sentMessages}/${totalMessages} messages sent`,
+      icon: TrendingUp,
+    },
+    {
+      title: "Pending Follow-ups",
+      value: pendingFollowUps.toString(),
+      change: "Active recommendations",
+      icon: Bell,
+    },
+  ]
+
+  const followUpItems = followUps.map((rec) => ({
+    ...rec,
+    contact: rec.contactId ? contactMap.get(rec.contactId) : undefined,
+  }))
+
+  const activityItems = recentActivity.map((activity) => {
+    const contact = activity.contactId ? contactMap.get(activity.contactId) : undefined
+    return { activity, contact }
+  })
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back! Here's your networking overview.</p>
+        <p className="text-muted-foreground">Welcome back! Here&apos;s your networking overview.</p>
       </div>
 
       {/* Stats Grid */}
@@ -103,10 +114,10 @@ export default function DashboardPage() {
                 <Icon className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="text-green-600">{stat.change}</span> from last month
-                </p>
+                <div className="text-2xl font-bold">
+                  {stat.value}
+                </div>
+                <p className="text-xs text-muted-foreground">{stat.change}</p>
               </CardContent>
             </Card>
           )
@@ -121,36 +132,49 @@ export default function DashboardPage() {
             <CardDescription>AI-powered suggestions for your next actions</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recommendations.map((rec) => (
-                <div key={rec.id} className="flex items-start gap-4 rounded-lg border p-4">
-                  <Avatar>
-                    <AvatarImage src="/placeholder.svg?height=40&width=40" />
-                    <AvatarFallback>
-                      {rec.contact
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium">{rec.contact}</p>
-                      <Badge
-                        variant={
-                          rec.priority === "high" ? "destructive" : rec.priority === "medium" ? "default" : "secondary"
-                        }
-                      >
-                        {rec.priority}
-                      </Badge>
+            {followUpItems.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                You&apos;re all caught up! No active recommendations.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {followUpItems.map((rec) => (
+                  <div key={rec._id} className="flex items-start gap-4 rounded-lg border p-4">
+                    <Avatar>
+                      <AvatarImage src={rec.contact?.avatar || "/placeholder.svg?height=40&width=40"} />
+                      <AvatarFallback>
+                        {(rec.contact?.name || rec.contactId)
+                          ?.toString()
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium">{rec.contact?.name ?? "Unknown contact"}</p>
+                        <Badge
+                          variant={
+                            rec.priority === "high"
+                              ? "destructive"
+                              : rec.priority === "medium"
+                                ? "default"
+                                : "secondary"
+                          }
+                        >
+                          {rec.priority}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{rec.contact?.company ?? "No company recorded"}</p>
+                      <p className="text-sm">{rec.action}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Last contact: {rec.daysSinceLastContact} days ago
+                      </p>
                     </div>
-                    <p className="text-sm text-muted-foreground">{rec.company}</p>
-                    <p className="text-sm">{rec.action}</p>
-                    <p className="text-xs text-muted-foreground">Last contact: {rec.daysAgo} days ago</p>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -161,29 +185,37 @@ export default function DashboardPage() {
             <CardDescription>Your latest interactions and updates</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-center gap-4">
-                  <Avatar>
-                    <AvatarImage src={activity.avatar || "/placeholder.svg"} />
-                    <AvatarFallback>
-                      {activity.contact
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 space-y-1">
-                    <p className="font-medium">{activity.contact}</p>
-                    <p className="text-sm text-muted-foreground">{activity.company}</p>
+            {activityItems.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                No recent activity recorded.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {activityItems.map(({ activity, contact }) => (
+                  <div key={activity._id} className="flex items-center gap-4">
+                    <Avatar>
+                      <AvatarImage src={contact?.avatar || "/placeholder.svg"} />
+                      <AvatarFallback>
+                        {(contact?.name ?? "NA")
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 space-y-1">
+                      <p className="font-medium">{contact?.name ?? "General activity"}</p>
+                      <p className="text-sm text-muted-foreground">{contact?.company ?? "No associated contact"}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium">{activity.description}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(activity.createdAt).toLocaleString()}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium">{activity.action}</p>
-                    <p className="text-xs text-muted-foreground">{activity.time}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

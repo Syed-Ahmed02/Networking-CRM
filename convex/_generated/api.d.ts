@@ -17,6 +17,7 @@ import type * as importHistory from "../importHistory.js";
 import type * as integrations from "../integrations.js";
 import type * as organizations from "../organizations.js";
 import type * as outreach from "../outreach.js";
+import type * as seed from "../seed.js";
 import type * as users from "../users.js";
 
 import type {
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   integrations: typeof integrations;
   organizations: typeof organizations;
   outreach: typeof outreach;
+  seed: typeof seed;
   users: typeof users;
 }>;
 declare const fullApiWithMounts: typeof fullApi;

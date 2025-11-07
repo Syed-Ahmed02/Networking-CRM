@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthUserId } from "./helpers";
+import type { Doc } from "./_generated/dataModel";
 
 // Query: Get all import history for the current user
 export const list = query({
@@ -114,7 +115,7 @@ export const updateStatus = mutation({
       throw new Error("Import record not found or unauthorized");
     }
 
-    const updates: any = {
+    const updates: Partial<Doc<"importHistory">> = {
       status: args.status,
     };
 

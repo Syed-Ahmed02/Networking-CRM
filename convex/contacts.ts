@@ -1,9 +1,61 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthUserId } from "./helpers";
+import type { Doc } from "./_generated/dataModel";
 
 // Query: Get all contacts for the current user
 export const list = query({
+  args: {
+    stage: v.optional(v.union(v.literal("lead"), v.literal("contacted"), v.literal("meeting"), v.literal("closed"))),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    const contactQuery = args.stage
+      ? ctx.db
+          .query("contacts")
+          .withIndex("by_user_stage", (q) => q.eq("userId", userId).eq("stage", args.stage!))
+      : ctx.db
+          .query("contacts")
+          .withIndex("by_user", (q) => q.eq("userId", userId));
+
+    const contacts = await contactQuery.collect();
+
+    return await Promise.all(
+      contacts.map(async (contact) => {
+        const [emails, phones] = await Promise.all([
+          ctx.db
+            .query("contactEmails")
+            .withIndex("by_contact", (q) => q.eq("contactId", contact._id))
+            .order("asc")
+            .collect(),
+          ctx.db
+            .query("contactPhones")
+            .withIndex("by_contact", (q) => q.eq("contactId", contact._id))
+            .order("asc")
+            .collect(),
+        ]);
+
+        const primaryEmail = emails.find((email) => email.isPrimary) ?? emails[0];
+        const primaryPhone = phones.find((phone) => phone.isPrimary) ?? phones[0];
+
+        return {
+          ...contact,
+          primaryEmail: primaryEmail ? primaryEmail.email : null,
+          primaryPhone: primaryPhone ? primaryPhone.sanitizedNumber ?? primaryPhone.rawNumber : null,
+          emails,
+          phones,
+        };
+      }),
+    );
+  },
+});
+
+// Query: Get lightweight contacts (without emails/phones)
+export const listBasic = query({
   args: {
     stage: v.optional(v.union(v.literal("lead"), v.literal("contacted"), v.literal("meeting"), v.literal("closed"))),
   },
@@ -228,7 +280,7 @@ export const update = mutation({
       throw new Error("Contact not found or unauthorized");
     }
 
-    const updates: any = {
+    const updates: Partial<Doc<"contacts">> = {
       updatedAt: Date.now(),
     };
 

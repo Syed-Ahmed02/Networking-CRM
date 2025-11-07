@@ -1,7 +1,10 @@
 "use client"
 
-import { useState } from "react"
-import { ChevronLeft, ChevronRight, Plus, CalendarIcon, Clock, Video, MapPin } from "lucide-react"
+import { useCallback, useMemo, useState } from "react"
+import { ChevronLeft, ChevronRight, Plus, CalendarIcon, Clock, Video, MapPin, Loader2 } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import type { Doc, Id } from "@/convex/_generated/dataModel"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import {
@@ -20,77 +23,28 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
-type CalendarEvent = {
-  id: string
-  title: string
-  contact: string
-  company: string
-  date: string
-  time: string
-  duration: number
-  type: "call" | "meeting" | "video"
-  location?: string
-  notes?: string
-  avatar?: string
+type ContactDoc = Doc<"contacts"> & {
+  primaryEmail?: string | null
+  primaryPhone?: string | null
 }
 
-const mockEvents: CalendarEvent[] = [
-  {
-    id: "1",
-    title: "Product Demo",
-    contact: "Sarah Johnson",
-    company: "TechCorp",
-    date: "2024-01-25",
-    time: "10:00 AM",
-    duration: 60,
-    type: "video",
-    location: "Zoom",
-    notes: "Demo of enterprise features",
-  },
-  {
-    id: "2",
-    title: "Follow-up Call",
-    contact: "Michael Chen",
-    company: "StartupXYZ",
-    date: "2024-01-25",
-    time: "2:00 PM",
-    duration: 30,
-    type: "call",
-  },
-  {
-    id: "3",
-    title: "Coffee Meeting",
-    contact: "Emily Rodriguez",
-    company: "Enterprise Inc",
-    date: "2024-01-26",
-    time: "11:00 AM",
-    duration: 45,
-    type: "meeting",
-    location: "Starbucks Downtown",
-  },
-  {
-    id: "4",
-    title: "Quarterly Review",
-    contact: "David Park",
-    company: "Innovation Labs",
-    date: "2024-01-27",
-    time: "3:00 PM",
-    duration: 90,
-    type: "video",
-    location: "Google Meet",
-  },
-  {
-    id: "5",
-    title: "Introduction Call",
-    contact: "Lisa Wang",
-    company: "Global Solutions",
-    date: "2024-01-29",
-    time: "9:00 AM",
-    duration: 30,
-    type: "call",
-  },
-]
+type EventWithContact = Doc<"calendarEvents"> & {
+  contact?: ContactDoc
+}
+
+type EventType = Doc<"calendarEvents">["type"]
+type ScheduleFormState = {
+  title: string
+  contactId: string
+  date: string
+  time: string
+  duration: string
+  type: EventType
+  location: string
+  notes: string
+}
 
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 const months = [
@@ -108,11 +62,63 @@ const months = [
   "December",
 ]
 
+const formatDateKey = (date: Date) => {
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, "0")
+  const day = `${date.getDate()}`.padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+const formatDateInput = (date: Date) => formatDateKey(date)
+
+const createInitialScheduleForm = (defaultDate: Date): ScheduleFormState => ({
+  title: "",
+  contactId: "",
+  date: formatDateInput(defaultDate),
+  time: "09:00",
+  duration: "30",
+  type: "call",
+  location: "",
+  notes: "",
+})
+
 export default function CalendarPage() {
-  const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 25)) // January 25, 2024
+  const contacts = useQuery(api.contacts.list, { stage: undefined }) as ContactDoc[] | undefined
+  const events = useQuery(api.calendarEvents.list, { date: undefined, contactId: undefined })
+  const createEvent = useMutation(api.calendarEvents.create)
+
+  const [currentDate, setCurrentDate] = useState(() => {
+    const date = new Date()
+    date.setHours(0, 0, 0, 0)
+    return date
+  })
   const [view, setView] = useState<"month" | "week" | "day">("week")
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false)
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
+  const [selectedEventId, setSelectedEventId] = useState<Id<"calendarEvents"> | null>(null)
+  const [scheduleForm, setScheduleForm] = useState<ScheduleFormState>(createInitialScheduleForm(new Date()))
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const contactMap = useMemo(() => {
+    const map = new Map<string, ContactDoc>()
+    if (!contacts) return map
+    for (const contact of contacts) {
+      map.set(contact._id, contact)
+    }
+    return map
+  }, [contacts])
+
+  const enrichedEvents: EventWithContact[] = useMemo(() => {
+    if (!events) return []
+    return events.map((event) => ({
+      ...event,
+      contact: event.contactId ? contactMap.get(event.contactId) : undefined,
+    }))
+  }, [events, contactMap])
+
+  const selectedEvent = useMemo(() => {
+    if (!selectedEventId) return null
+    return enrichedEvents.find((event) => event._id === selectedEventId) ?? null
+  }, [enrichedEvents, selectedEventId])
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear()
@@ -122,7 +128,7 @@ export default function CalendarPage() {
     const daysInMonth = lastDay.getDate()
     const startingDayOfWeek = firstDay.getDay()
 
-    const days = []
+    const days: Array<Date | null> = []
     for (let i = 0; i < startingDayOfWeek; i++) {
       days.push(null)
     }
@@ -138,20 +144,23 @@ export default function CalendarPage() {
     const sunday = new Date(date)
     sunday.setDate(diff)
 
-    const week = []
+    const week: Date[] = []
     for (let i = 0; i < 7; i++) {
-      const day = new Date(sunday)
-      day.setDate(sunday.getDate() + i)
-      week.push(day)
+      const dayOfWeek = new Date(sunday)
+      dayOfWeek.setDate(sunday.getDate() + i)
+      week.push(dayOfWeek)
     }
     return week
   }
 
-  const getEventsForDate = (date: Date | null) => {
-    if (!date) return []
-    const dateStr = date.toISOString().split("T")[0]
-    return mockEvents.filter((event) => event.date === dateStr)
-  }
+  const getEventsForDate = useCallback(
+    (date: Date | null) => {
+      if (!date) return []
+      const dateKey = formatDateKey(date)
+      return enrichedEvents.filter((event) => event.date === dateKey)
+    },
+    [enrichedEvents],
+  )
 
   const navigateMonth = (direction: number) => {
     const newDate = new Date(currentDate)
@@ -165,7 +174,7 @@ export default function CalendarPage() {
     setCurrentDate(newDate)
   }
 
-  const getEventTypeIcon = (type: CalendarEvent["type"]) => {
+  const getEventTypeIcon = (type: EventWithContact["type"]) => {
     switch (type) {
       case "video":
         return <Video className="h-3 w-3" />
@@ -176,7 +185,7 @@ export default function CalendarPage() {
     }
   }
 
-  const getEventTypeColor = (type: CalendarEvent["type"]) => {
+  const getEventTypeColor = (type: EventWithContact["type"]) => {
     switch (type) {
       case "video":
         return "bg-blue-500"
@@ -186,6 +195,47 @@ export default function CalendarPage() {
         return "bg-purple-500"
     }
   }
+
+  const handleScheduleEvent = async () => {
+    if (!scheduleForm.title.trim() || !scheduleForm.date || !scheduleForm.time) {
+      toast("Missing details", {
+        description: "Title, date, and time are required.",
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      await createEvent({
+        title: scheduleForm.title.trim(),
+        date: scheduleForm.date,
+        time: scheduleForm.time,
+        duration: Number(scheduleForm.duration),
+        type: scheduleForm.type,
+        location: scheduleForm.location.trim() ? scheduleForm.location.trim() : undefined,
+        notes: scheduleForm.notes.trim() ? scheduleForm.notes.trim() : undefined,
+        contactId: scheduleForm.contactId ? (scheduleForm.contactId as Id<"contacts">) : undefined,
+      })
+
+      toast("Event scheduled", {
+        description: `${scheduleForm.title.trim()} has been added to your calendar.`,
+      })
+
+      const resetDate = new Date(scheduleForm.date)
+      setScheduleForm(createInitialScheduleForm(resetDate))
+      setIsScheduleDialogOpen(false)
+    } catch (error) {
+      console.error(error)
+      toast("Failed to schedule event", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const isLoading = events === undefined || contacts === undefined
 
   return (
     <div className="space-y-6">
@@ -210,35 +260,59 @@ export default function CalendarPage() {
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="event-title">Title</Label>
-                <Input id="event-title" placeholder="Product Demo" />
+                <Input
+                  id="event-title"
+                  placeholder="Product Demo"
+                  value={scheduleForm.title}
+                  onChange={(event) => setScheduleForm((prev) => ({ ...prev, title: event.target.value }))}
+                />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="contact">Contact</Label>
-                <Select>
+                <Select
+                  value={scheduleForm.contactId}
+                  onValueChange={(value) => setScheduleForm((prev) => ({ ...prev, contactId: value }))}
+                >
                   <SelectTrigger id="contact">
-                    <SelectValue placeholder="Select a contact" />
+                    <SelectValue placeholder={isLoading ? "Loading contacts..." : "Select a contact"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1">Sarah Johnson - TechCorp</SelectItem>
-                    <SelectItem value="2">Michael Chen - StartupXYZ</SelectItem>
-                    <SelectItem value="3">Emily Rodriguez - Enterprise Inc</SelectItem>
+                    <SelectItem value="">No contact</SelectItem>
+                    {contacts?.map((contact) => (
+                      <SelectItem key={contact._id} value={contact._id}>
+                        {contact.name} - {contact.company}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="date">Date</Label>
-                  <Input id="date" type="date" />
+                  <Input
+                    id="date"
+                    type="date"
+                    value={scheduleForm.date}
+                    onChange={(event) => setScheduleForm((prev) => ({ ...prev, date: event.target.value }))}
+                  />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="time">Time</Label>
-                  <Input id="time" type="time" />
+                  <Input
+                    id="time"
+                    type="time"
+                    value={scheduleForm.time}
+                    onChange={(event) => setScheduleForm((prev) => ({ ...prev, time: event.target.value }))}
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="duration">Duration (minutes)</Label>
-                  <Select defaultValue="30">
+                  <Select
+                    value={scheduleForm.duration}
+                    onValueChange={(value) => setScheduleForm((prev) => ({ ...prev, duration: value }))}
+                  >
                     <SelectTrigger id="duration">
                       <SelectValue />
                     </SelectTrigger>
@@ -253,7 +327,10 @@ export default function CalendarPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="type">Type</Label>
-                  <Select defaultValue="video">
+                  <Select
+                    value={scheduleForm.type}
+                    onValueChange={(value: EventType) => setScheduleForm((prev) => ({ ...prev, type: value }))}
+                  >
                     <SelectTrigger id="type">
                       <SelectValue />
                     </SelectTrigger>
@@ -267,18 +344,37 @@ export default function CalendarPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="location">Location (optional)</Label>
-                <Input id="location" placeholder="Zoom, Google Meet, or address" />
+                <Input
+                  id="location"
+                  placeholder="Zoom, Google Meet, or address"
+                  value={scheduleForm.location}
+                  onChange={(event) => setScheduleForm((prev) => ({ ...prev, location: event.target.value }))}
+                />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="notes">Notes (optional)</Label>
-                <Textarea id="notes" placeholder="Add any relevant notes..." />
+                <Textarea
+                  id="notes"
+                  placeholder="Add any relevant notes..."
+                  value={scheduleForm.notes}
+                  onChange={(event) => setScheduleForm((prev) => ({ ...prev, notes: event.target.value }))}
+                />
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsScheduleDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={() => setIsScheduleDialogOpen(false)}>Schedule</Button>
+              <Button onClick={handleScheduleEvent} disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Scheduling...
+                  </>
+                ) : (
+                  "Schedule"
+                )}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -332,8 +428,8 @@ export default function CalendarPage() {
               </div>
               <div className="grid grid-cols-7 gap-2">
                 {getWeekDays(currentDate).map((date, index) => {
-                  const events = getEventsForDate(date)
-                  const isToday = date.toDateString() === new Date(2024, 0, 25).toDateString()
+                  const eventsForDay = getEventsForDate(date)
+                  const isToday = date.toDateString() === new Date().toDateString()
 
                   return (
                     <div
@@ -342,19 +438,27 @@ export default function CalendarPage() {
                     >
                       <div className={cn("mb-2 text-sm font-medium", isToday && "text-primary")}>{date.getDate()}</div>
                       <div className="space-y-1">
-                        {events.map((event) => (
+                        {eventsForDay.map((event) => (
                           <button
-                            key={event.id}
-                            onClick={() => setSelectedEvent(event)}
+                            key={event._id}
+                            onClick={() => setSelectedEventId(event._id)}
                             className="w-full rounded border-l-2 border-primary bg-primary/10 p-1 text-left text-xs hover:bg-primary/20"
                           >
                             <div className="flex items-center gap-1">
                               {getEventTypeIcon(event.type)}
-                              <span className="truncate font-medium">{event.time}</span>
+                              <span className="truncate font-medium">
+                                {new Date(`${event.date}T${event.time}`).toLocaleTimeString([], {
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                })}
+                              </span>
                             </div>
                             <div className="truncate">{event.title}</div>
                           </button>
                         ))}
+                        {!eventsForDay.length && (
+                          <div className="text-center text-[11px] italic text-muted-foreground">No events</div>
+                        )}
                       </div>
                     </div>
                   )
@@ -378,8 +482,8 @@ export default function CalendarPage() {
                     return <div key={index} className="min-h-[80px]" />
                   }
 
-                  const events = getEventsForDate(date)
-                  const isToday = date.toDateString() === new Date(2024, 0, 25).toDateString()
+                  const eventsForDay = getEventsForDate(date)
+                  const isToday = date.toDateString() === new Date().toDateString()
 
                   return (
                     <div
@@ -388,10 +492,10 @@ export default function CalendarPage() {
                     >
                       <div className={cn("mb-1 text-sm font-medium", isToday && "text-primary")}>{date.getDate()}</div>
                       <div className="space-y-1">
-                        {events.slice(0, 2).map((event) => (
+                        {eventsForDay.slice(0, 2).map((event) => (
                           <button
-                            key={event.id}
-                            onClick={() => setSelectedEvent(event)}
+                            key={event._id}
+                            onClick={() => setSelectedEventId(event._id)}
                             className={cn(
                               "w-full rounded px-1 py-0.5 text-left text-xs",
                               getEventTypeColor(event.type),
@@ -401,8 +505,11 @@ export default function CalendarPage() {
                             <div className="truncate">{event.title}</div>
                           </button>
                         ))}
-                        {events.length > 2 && (
-                          <div className="text-xs text-muted-foreground">+{events.length - 2} more</div>
+                        {eventsForDay.length > 2 && (
+                          <div className="text-xs text-muted-foreground">+{eventsForDay.length - 2} more</div>
+                        )}
+                        {!eventsForDay.length && (
+                          <div className="text-center text-[11px] italic text-muted-foreground">No events</div>
                         )}
                       </div>
                     </div>
@@ -421,17 +528,13 @@ export default function CalendarPage() {
               </div>
               <div className="space-y-3">
                 {getEventsForDate(currentDate).map((event) => (
-                  <Card
-                    key={event.id}
-                    className="cursor-pointer hover:bg-accent"
-                    onClick={() => setSelectedEvent(event)}
-                  >
+                  <Card key={event._id} className="cursor-pointer hover:bg-accent" onClick={() => setSelectedEventId(event._id)}>
                     <CardContent className="flex items-center gap-4 p-4">
                       <div className={cn("h-12 w-1 rounded", getEventTypeColor(event.type))} />
                       <Avatar>
-                        <AvatarImage src={event.avatar || "/placeholder.svg?height=40&width=40"} />
+                        <AvatarImage src={event.contact?.avatar || "/placeholder.svg?height=40&width=40"} />
                         <AvatarFallback>
-                          {event.contact
+                          {(event.contact?.name ?? event.title)
                             .split(" ")
                             .map((n) => n[0])
                             .join("")}
@@ -445,11 +548,16 @@ export default function CalendarPage() {
                           </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {event.contact} - {event.company}
+                          {event.contact?.name ?? "No contact"} - {event.contact?.company ?? "N/A"}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-medium">{event.time}</p>
+                        <p className="font-medium">
+                          {new Date(`${event.date}T${event.time}`).toLocaleTimeString([], {
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </p>
                         <p className="text-sm text-muted-foreground">{event.duration} min</p>
                       </div>
                     </CardContent>
@@ -457,9 +565,19 @@ export default function CalendarPage() {
                 ))}
                 {getEventsForDate(currentDate).length === 0 && (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <CalendarIcon className="h-12 w-12 text-muted-foreground" />
-                    <h3 className="mt-4 text-lg font-semibold">No events scheduled</h3>
-                    <p className="text-sm text-muted-foreground">Schedule a call to get started</p>
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
+                        <h3 className="mt-4 text-lg font-semibold">Loading events</h3>
+                        <p className="text-sm text-muted-foreground">Fetching your schedule...</p>
+                      </>
+                    ) : (
+                      <>
+                        <CalendarIcon className="h-12 w-12 text-muted-foreground" />
+                        <h3 className="mt-4 text-lg font-semibold">No events scheduled</h3>
+                        <p className="text-sm text-muted-foreground">Schedule a call to get started</p>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -469,30 +587,30 @@ export default function CalendarPage() {
       </Card>
 
       {/* Event Detail Dialog */}
-      <Dialog open={!!selectedEvent} onOpenChange={() => setSelectedEvent(null)}>
+      <Dialog open={!!selectedEvent} onOpenChange={() => setSelectedEventId(null)}>
         <DialogContent>
           {selectedEvent && (
             <>
               <DialogHeader>
                 <DialogTitle>{selectedEvent.title}</DialogTitle>
                 <DialogDescription>
-                  {selectedEvent.date} at {selectedEvent.time}
+                  {new Date(`${selectedEvent.date}T${selectedEvent.time}`).toLocaleString()}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="flex items-center gap-4">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src={selectedEvent.avatar || "/placeholder.svg?height=48&width=48"} />
+                    <AvatarImage src={selectedEvent.contact?.avatar || "/placeholder.svg?height=48&width=48"} />
                     <AvatarFallback>
-                      {selectedEvent.contact
+                      {(selectedEvent.contact?.name ?? selectedEvent.title)
                         .split(" ")
                         .map((n) => n[0])
                         .join("")}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium">{selectedEvent.contact}</p>
-                    <p className="text-sm text-muted-foreground">{selectedEvent.company}</p>
+                    <p className="font-medium">{selectedEvent.contact?.name ?? "No contact assigned"}</p>
+                    <p className="text-sm text-muted-foreground">{selectedEvent.contact?.company ?? "N/A"}</p>
                   </div>
                 </div>
                 <div className="grid gap-3">
@@ -519,7 +637,7 @@ export default function CalendarPage() {
                 )}
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setSelectedEvent(null)}>
+                <Button variant="outline" onClick={() => setSelectedEventId(null)}>
                   Close
                 </Button>
                 <Button>Edit Event</Button>
@@ -531,3 +649,4 @@ export default function CalendarPage() {
     </div>
   )
 }
+

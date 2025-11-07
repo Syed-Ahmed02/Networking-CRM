@@ -2,8 +2,11 @@
 
 import type React from "react"
 
-import { useState } from "react"
-import { Plus, Upload, Mail, Linkedin, Phone, MoreVertical } from "lucide-react"
+import { useMemo, useState } from "react"
+import { Plus, Upload, Mail, Linkedin, Phone, MoreVertical, Loader2 } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import type { Doc, Id } from "@/convex/_generated/dataModel"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -22,88 +25,39 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { toast } from "sonner"
 
-type Contact = {
-  id: string
+type Stage = Doc<"contacts">["stage"]
+
+type ContactWithDetails = Doc<"contacts"> & {
+  primaryEmail: string | null
+  primaryPhone: string | null
+  emails: Doc<"contactEmails">[]
+  phones: Doc<"contactPhones">[]
+}
+
+type Column = Stage
+
+type ContactFormState = {
   name: string
   company: string
   role: string
+  stage: Stage
   email: string
-  phone?: string
-  linkedin?: string
-  lastContacted: string
-  notes?: string
-  avatar?: string
+  phone: string
+  linkedin: string
+  notes: string
 }
 
-type Column = "lead" | "contacted" | "meeting" | "closed"
-
-const mockContacts: Record<Column, Contact[]> = {
-  lead: [
-    {
-      id: "1",
-      name: "Sarah Johnson",
-      company: "TechCorp",
-      role: "VP of Engineering",
-      email: "sarah.j@techcorp.com",
-      linkedin: "linkedin.com/in/sarahjohnson",
-      lastContacted: "2024-01-15",
-      notes: "Interested in our enterprise solution",
-    },
-    {
-      id: "2",
-      name: "Michael Chen",
-      company: "StartupXYZ",
-      role: "Founder & CEO",
-      email: "michael@startupxyz.com",
-      phone: "+1 (555) 123-4567",
-      lastContacted: "2024-01-10",
-    },
-  ],
-  contacted: [
-    {
-      id: "3",
-      name: "Emily Rodriguez",
-      company: "Enterprise Inc",
-      role: "CTO",
-      email: "emily.r@enterprise.com",
-      linkedin: "linkedin.com/in/emilyrodriguez",
-      lastContacted: "2024-01-18",
-      notes: "Sent proposal, awaiting response",
-    },
-    {
-      id: "4",
-      name: "David Park",
-      company: "Innovation Labs",
-      role: "Product Manager",
-      email: "david@innovationlabs.com",
-      lastContacted: "2024-01-17",
-    },
-  ],
-  meeting: [
-    {
-      id: "5",
-      name: "Lisa Wang",
-      company: "Global Solutions",
-      role: "Director of Operations",
-      email: "lisa.wang@globalsolutions.com",
-      phone: "+1 (555) 987-6543",
-      lastContacted: "2024-01-20",
-      notes: "Demo scheduled for next week",
-    },
-  ],
-  closed: [
-    {
-      id: "6",
-      name: "James Miller",
-      company: "Tech Ventures",
-      role: "Investment Partner",
-      email: "james@techventures.com",
-      linkedin: "linkedin.com/in/jamesmiller",
-      lastContacted: "2024-01-22",
-      notes: "Deal closed - $50k contract",
-    },
-  ],
+const initialFormState: ContactFormState = {
+  name: "",
+  company: "",
+  role: "",
+  stage: "lead",
+  email: "",
+  phone: "",
+  linkedin: "",
+  notes: "",
 }
 
 const columns: { id: Column; title: string; color: string }[] = [
@@ -114,37 +68,133 @@ const columns: { id: Column; title: string; color: string }[] = [
 ]
 
 export default function ContactsPage() {
-  const [contacts, setContacts] = useState(mockContacts)
-  const [selectedContact, setSelectedContact] = useState<Contact | null>(null)
+  const contacts = useQuery(api.contacts.list, { stage: undefined })
+
+  const createContact = useMutation(api.contacts.create)
+  const updateContactStage = useMutation(api.contacts.updateStage)
+
+  const [selectedContactId, setSelectedContactId] = useState<Id<"contacts"> | null>(null)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
-  const [draggedContact, setDraggedContact] = useState<{ contact: Contact; fromColumn: Column } | null>(null)
+  const [draggedContact, setDraggedContact] = useState<{ contactId: Id<"contacts">; fromColumn: Column } | null>(null)
 
-  const handleDragStart = (contact: Contact, column: Column) => {
-    setDraggedContact({ contact, fromColumn: column })
+  const [formState, setFormState] = useState(initialFormState)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const isLoading = contacts === undefined
+
+  const contactsByStage = useMemo(() => {
+    const base: Record<Stage, ContactWithDetails[]> = {
+      lead: [],
+      contacted: [],
+      meeting: [],
+      closed: [],
+    }
+    if (!contacts) return base
+    for (const contact of contacts as ContactWithDetails[]) {
+      base[contact.stage].push(contact)
+    }
+    return base
+  }, [contacts])
+
+  const selectedContact = useMemo(() => {
+    if (!contacts || !selectedContactId) return null
+    return (contacts as ContactWithDetails[]).find((contact) => contact._id === selectedContactId) ?? null
+  }, [contacts, selectedContactId])
+
+  const handleDragStart = (contactId: Id<"contacts">, column: Column) => {
+    setDraggedContact({ contactId, fromColumn: column })
   }
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
   }
 
-  const handleDrop = (toColumn: Column) => {
+  const handleDrop = async (toColumn: Column) => {
     if (!draggedContact) return
 
-    const { contact, fromColumn } = draggedContact
+    const { contactId, fromColumn } = draggedContact
 
     if (fromColumn === toColumn) {
       setDraggedContact(null)
       return
     }
 
-    setContacts((prev) => ({
-      ...prev,
-      [fromColumn]: prev[fromColumn].filter((c) => c.id !== contact.id),
-      [toColumn]: [...prev[toColumn], contact],
-    }))
-
+    try {
+      await updateContactStage({ contactId, stage: toColumn })
+    } catch (error) {
+      console.error(error)
+      toast("Unable to move contact", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      })
+    }
     setDraggedContact(null)
+  }
+
+  const handleAddContact = async () => {
+    if (!formState.name.trim() || !formState.company.trim() || !formState.role.trim()) {
+      toast("Missing details", {
+        description: "Name, company, and role are required.",
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+
+    const nameParts = formState.name.trim().split(/\s+/)
+    const firstName = nameParts[0] ?? formState.name.trim()
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : undefined
+    const sanitizedPhone = formState.phone ? formState.phone.replace(/[^\d+]/g, "") : undefined
+
+    try {
+      await createContact({
+        name: formState.name.trim(),
+        firstName,
+        lastName,
+        company: formState.company.trim(),
+        role: formState.role.trim(),
+        stage: formState.stage,
+        notes: formState.notes.trim() ? formState.notes.trim() : undefined,
+        linkedinUrl: formState.linkedin.trim() ? formState.linkedin.trim() : undefined,
+        emails: formState.email.trim()
+          ? [
+              {
+                email: formState.email.trim(),
+                emailStatus: "verified",
+                emailSource: "manual",
+                position: 0,
+                isPrimary: true,
+              },
+            ]
+          : undefined,
+        phones: formState.phone.trim()
+          ? [
+              {
+                rawNumber: formState.phone.trim(),
+                sanitizedNumber: sanitizedPhone ?? formState.phone.trim(),
+                type: "mobile",
+                status: "valid_number",
+                position: 0,
+                isPrimary: true,
+              },
+            ]
+          : undefined,
+      })
+
+      toast("Contact added", {
+        description: `${formState.name.trim()} is now in your pipeline.`,
+      })
+
+      setFormState(initialFormState)
+      setIsAddDialogOpen(false)
+    } catch (error) {
+      console.error(error)
+      toast("Failed to add contact", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -202,23 +252,41 @@ export default function ContactsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="name">Name</Label>
-                    <Input id="name" placeholder="John Doe" />
+                      <Input
+                        id="name"
+                        placeholder="John Doe"
+                        value={formState.name}
+                        onChange={(event) => setFormState((prev) => ({ ...prev, name: event.target.value }))}
+                      />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="company">Company</Label>
-                    <Input id="company" placeholder="Acme Inc" />
+                      <Input
+                        id="company"
+                        placeholder="Acme Inc"
+                        value={formState.company}
+                        onChange={(event) => setFormState((prev) => ({ ...prev, company: event.target.value }))}
+                      />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="role">Role</Label>
-                    <Input id="role" placeholder="CEO" />
+                      <Input
+                        id="role"
+                        placeholder="CEO"
+                        value={formState.role}
+                        onChange={(event) => setFormState((prev) => ({ ...prev, role: event.target.value }))}
+                      />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="stage">Stage</Label>
-                    <Select defaultValue="lead">
-                      <SelectTrigger id="stage">
-                        <SelectValue />
+                      <Select
+                        value={formState.stage}
+                        onValueChange={(value: Stage) => setFormState((prev) => ({ ...prev, stage: value }))}
+                      >
+                        <SelectTrigger id="stage">
+                          <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="lead">Lead</SelectItem>
@@ -231,28 +299,58 @@ export default function ContactsPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" placeholder="john@acme.com" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="john@acme.com"
+                    value={formState.email}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, email: event.target.value }))}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="phone">Phone (optional)</Label>
-                    <Input id="phone" placeholder="+1 (555) 123-4567" />
+                    <Input
+                      id="phone"
+                      placeholder="+1 (555) 123-4567"
+                      value={formState.phone}
+                      onChange={(event) => setFormState((prev) => ({ ...prev, phone: event.target.value }))}
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="linkedin">LinkedIn (optional)</Label>
-                    <Input id="linkedin" placeholder="linkedin.com/in/johndoe" />
+                    <Input
+                      id="linkedin"
+                      placeholder="linkedin.com/in/johndoe"
+                      value={formState.linkedin}
+                      onChange={(event) => setFormState((prev) => ({ ...prev, linkedin: event.target.value }))}
+                    />
                   </div>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="notes">Notes (optional)</Label>
-                  <Textarea id="notes" placeholder="Add any relevant notes..." />
+                  <Textarea
+                    id="notes"
+                    placeholder="Add any relevant notes..."
+                    value={formState.notes}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, notes: event.target.value }))}
+                  />
                 </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={() => setIsAddDialogOpen(false)}>Add Contact</Button>
+                <Button onClick={handleAddContact} disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Add Contact"
+                  )}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -273,19 +371,29 @@ export default function ContactsPage() {
               <div className={`h-2 w-2 rounded-full ${column.color}`} />
               <h3 className="font-semibold">{column.title}</h3>
               <Badge variant="secondary" className="ml-auto">
-                {contacts[column.id].length}
+                {contactsByStage[column.id].length}
               </Badge>
             </div>
 
             {/* Contact Cards */}
             <div className="space-y-3">
-              {contacts[column.id].map((contact) => (
+              {isLoading ? (
+                <div className="flex items-center justify-center rounded-lg border py-10 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Loading contacts...
+                </div>
+              ) : contactsByStage[column.id].length === 0 ? (
+                <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+                  No contacts in this stage yet.
+                </div>
+              ) : (
+                contactsByStage[column.id].map((contact) => (
                 <Card
-                  key={contact.id}
+                  key={contact._id}
                   draggable
-                  onDragStart={() => handleDragStart(contact, column.id)}
+                  onDragStart={() => handleDragStart(contact._id, column.id)}
                   className="cursor-move transition-shadow hover:shadow-lg"
-                  onClick={() => setSelectedContact(contact)}
+                  onClick={() => setSelectedContactId(contact._id)}
                 >
                   <CardHeader className="p-4">
                     <div className="flex items-start justify-between">
@@ -323,18 +431,18 @@ export default function ContactsPage() {
                       <p className="text-sm font-medium">{contact.company}</p>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Mail className="h-3 w-3" />
-                        {contact.email}
+                        {contact.primaryEmail ?? "No email recorded"}
                       </div>
-                      {contact.linkedin && (
+                      {contact.linkedinUrl && (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Linkedin className="h-3 w-3" />
-                          LinkedIn
+                          LinkedIn Profile
                         </div>
                       )}
-                      {contact.phone && (
+                      {contact.primaryPhone && (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Phone className="h-3 w-3" />
-                          {contact.phone}
+                          {contact.primaryPhone}
                         </div>
                       )}
                       <p className="text-xs text-muted-foreground">
@@ -343,14 +451,15 @@ export default function ContactsPage() {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                ))
+              )}
             </div>
           </div>
         ))}
       </div>
 
       {/* Contact Detail Dialog */}
-      <Dialog open={!!selectedContact} onOpenChange={() => setSelectedContact(null)}>
+      <Dialog open={!!selectedContact} onOpenChange={() => setSelectedContactId(null)}>
         <DialogContent className="max-w-2xl">
           {selectedContact && (
             <>
@@ -378,24 +487,33 @@ export default function ContactsPage() {
                   <Label className="text-sm font-medium">Email</Label>
                   <div className="flex items-center gap-2">
                     <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{selectedContact.email}</span>
+                    <span className="text-sm">
+                      {selectedContact.primaryEmail ?? "No email recorded"}
+                    </span>
                   </div>
                 </div>
-                {selectedContact.phone && (
+                {selectedContact.primaryPhone && (
                   <div className="grid gap-2">
                     <Label className="text-sm font-medium">Phone</Label>
                     <div className="flex items-center gap-2">
                       <Phone className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{selectedContact.phone}</span>
+                      <span className="text-sm">{selectedContact.primaryPhone}</span>
                     </div>
                   </div>
                 )}
-                {selectedContact.linkedin && (
+                {selectedContact.linkedinUrl && (
                   <div className="grid gap-2">
                     <Label className="text-sm font-medium">LinkedIn</Label>
                     <div className="flex items-center gap-2">
                       <Linkedin className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{selectedContact.linkedin}</span>
+                      <a
+                        href={selectedContact.linkedinUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-primary hover:underline"
+                      >
+                        {selectedContact.linkedinUrl}
+                      </a>
                     </div>
                   </div>
                 )}
@@ -411,7 +529,7 @@ export default function ContactsPage() {
                 )}
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setSelectedContact(null)}>
+                <Button variant="outline" onClick={() => setSelectedContactId(null)}>
                   Close
                 </Button>
                 <Button>Edit Contact</Button>

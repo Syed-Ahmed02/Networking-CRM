@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthUserId } from "./helpers";
+import type { Doc } from "./_generated/dataModel";
 
 // Query: Get all outreach searches for the current user
 export const listSearches = query({
@@ -197,7 +198,7 @@ export const updateMessage = mutation({
       }
     }
 
-    const updates: any = {};
+    const updates: Partial<Doc<"outreachMessages">> = {};
     if (args.message !== undefined) updates.message = args.message;
     if (args.tone !== undefined) updates.tone = args.tone;
     if (args.contactId !== undefined) updates.contactId = args.contactId;

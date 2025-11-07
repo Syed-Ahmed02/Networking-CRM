@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthUserId } from "./helpers";
+import type { Doc } from "./_generated/dataModel";
 
 // Query: Get current user profile
 export const getCurrent = query({
@@ -129,7 +130,7 @@ export const update = mutation({
       throw new Error("User profile not found");
     }
 
-    const updates: any = {
+    const updates: Partial<Doc<"users">> = {
       updatedAt: Date.now(),
     };
 
@@ -151,36 +152,72 @@ export const update = mutation({
 
 
 
-export const store = mutation({
+export const ensureCurrentUser = mutation({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("Called storeUser without authentication present");
+      throw new Error("Called ensureCurrentUser without authentication present");
     }
 
-    // Check if we've already stored this identity before.
-    // Note: If you don't want to define an index right away, you can use
-    // ctx.db.query("users")
-    //  .filter(q => q.eq(q.field("tokenIdentifier"), identity.tokenIdentifier))
-    //  .unique();
-    const user = await ctx.db
+    const now = Date.now();
+    const clerkUserId = identity.subject;
+    const nameParts =
+      identity.name
+        ?.trim()
+        .split(/\s+/)
+        .filter((part) => part.length > 0) ?? [];
+    const firstName =
+      identity.givenName ?? (nameParts.length > 0 ? nameParts[0] : "") ?? "";
+    const lastName =
+      identity.familyName ??
+      (nameParts.length > 1 ? nameParts.slice(1).join(" ") : "") ??
+      "";
+    const email = identity.email ?? "";
+    const avatar = identity.pictureUrl ?? undefined;
+
+    const existingUser = await ctx.db
       .query("users")
-      .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier),
-      )
-      .unique();
-    if (user !== null) {
-      // If we've seen this identity before but the name has changed, patch the value.
-      if (user.name !== identity.name) {
-        await ctx.db.patch(user._id, { name: identity.name });
+      .withIndex("by_clerk_user", (q) => q.eq("clerkUserId", clerkUserId))
+      .first();
+
+    if (existingUser) {
+      const updates: Record<string, unknown> = { updatedAt: now };
+
+      if (firstName && firstName !== existingUser.firstName) {
+        updates.firstName = firstName;
       }
-      return user._id;
+      if (lastName && lastName !== existingUser.lastName) {
+        updates.lastName = lastName;
+      }
+      if (email && email !== existingUser.email) {
+        updates.email = email;
+      }
+      if (avatar && avatar !== existingUser.avatar) {
+        updates.avatar = avatar;
+      }
+
+      if (Object.keys(updates).length > 1) {
+        await ctx.db.patch(existingUser._id, updates);
+      }
+
+      return existingUser._id;
     }
-    // If it's a new identity, create a new `User`.
+
+    const fallbackFirstName = firstName || nameParts[0] || "User";
+    const fallbackLastName = lastName || nameParts.slice(1).join(" ");
+    const fallbackEmail =
+      email ||
+      `${clerkUserId.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}@example.com`;
+
     return await ctx.db.insert("users", {
-      name: identity.name ?? "Anonymous",
-      tokenIdentifier: identity.tokenIdentifier,
+      clerkUserId,
+      firstName: fallbackFirstName,
+      lastName: fallbackLastName,
+      email: fallbackEmail,
+      ...(avatar ? { avatar } : {}),
+      createdAt: now,
+      updatedAt: now,
     });
   },
 });
