@@ -35,7 +35,7 @@ export function Hero() {
           <BlurFade delay={0.3}>
             <p className="text-lg md:text-xl text-muted-foreground max-w-2xl">
               Build meaningful connections effortlessly. Research companies, find the right people, 
-              and craft personalized outreach—all powered by AI. Your networking companion, 
+              and craft personalized outreach, all powered by AI. Your networking companion, 
               always ready to help.
             </p>
           </BlurFade>

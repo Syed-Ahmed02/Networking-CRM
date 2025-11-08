@@ -283,7 +283,7 @@ export const init = internalMutation({
         company: "TechCorp",
         tone: "professional" as const,
         message:
-          "Hi Sarah,\n\nIt was great learning more about TechCorp's roadmap. I'd love to schedule a quick call to walk through how NetworkCRM helps engineering leaders accelerate partner onboarding.\n\nWould next Tuesday at 10am PT work?\n\nBest,\nAlex",
+          "Hi Sarah,\n\nIt was great learning more about TechCorp's roadmap. I'd love to schedule a quick call to walk through how CoffeeAgent.AI helps engineering leaders accelerate partner onboarding.\n\nWould next Tuesday at 10am PT work?\n\nBest,\nAlex",
         sent: false,
       },
       {

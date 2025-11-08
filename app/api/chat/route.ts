@@ -95,7 +95,7 @@ export async function POST(req: Request) {
       model,
       messages: convertToModelMessages(messages),
       tools,
-      system: `You are an AI assistant for a Networking CRM system. You help users research companies, find people, and generate outreach emails.
+      system: `You are an AI assistant for CoffeeAgent.AI, a professional networking platform. You help users research companies, find people, and generate outreach emails.
 
 Your capabilities:
 1. Research companies - Get comprehensive information about companies including their domain, social media, industry, and key people
