@@ -4,7 +4,7 @@ import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import type { Doc } from "@/convex/_generated/dataModel"
-import { Search, Plus, Loader2, Sparkles, Mail, Linkedin, MapPin } from "lucide-react"
+import { Search, Plus, Loader2, Sparkles, Mail, Linkedin, MapPin, Edit, Wand2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,6 +14,18 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
 import { DashboardAuthBoundary } from "../DashboardAuthBoundary"
+import { DataTable } from "@/components/ui/data-table"
+import type { ColumnDef } from "@tanstack/react-table"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type ContactDoc = Doc<"contacts"> & {
   primaryEmail?: string | null
@@ -33,15 +45,24 @@ export default function OutreachPage() {
 function OutreachContent() {
   const contacts = useQuery(api.contacts.list, { stage: undefined }) as ContactDoc[] | undefined
   const outreachMessages = useQuery(api.outreach.listMessages, { sent: undefined, contactId: undefined })
-  const outreachSearches = useQuery(api.outreach.listSearches, {})
 
   const createSearch = useMutation(api.outreach.createSearch)
   const markMessageSent = useMutation(api.outreach.markMessageSent)
+  const createMessage = useMutation(api.outreach.createMessage)
+  const updateMessage = useMutation(api.outreach.updateMessage)
 
   const [searchQuery, setSearchQuery] = useState("")
   const [isSearching, setIsSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
   const [searchResults, setSearchResults] = useState<ContactDoc[]>([])
+  const [editingContact, setEditingContact] = useState<ContactDoc | null>(null)
+  const [isGeneratingEmail, setIsGeneratingEmail] = useState(false)
+  const [generatedEmail, setGeneratedEmail] = useState<{ subject: string; message: string } | null>(null)
+  const [emailPurpose, setEmailPurpose] = useState("")
+  const [emailTone, setEmailTone] = useState<"professional" | "casual" | "friendly">("professional")
+  const [editingMessageId, setEditingMessageId] = useState<Doc<"outreachMessages">["_id"] | null>(null)
+  const [editingMessageText, setEditingMessageText] = useState("")
+  const [editingMessageTone, setEditingMessageTone] = useState<"professional" | "casual" | "friendly">("professional")
 
   const handleSearch = async () => {
     const trimmedQuery = searchQuery.trim()
@@ -134,6 +155,184 @@ function OutreachContent() {
     return parts.join(", ") || "Unknown"
   }
 
+  const handleGenerateEmail = async () => {
+    if (!editingContact) return
+
+    if (!emailPurpose.trim()) {
+      toast.error("Please enter a purpose for the email", {
+        description: "The email purpose is required to generate a personalized message.",
+      })
+      return
+    }
+
+    setIsGeneratingEmail(true)
+    setGeneratedEmail(null)
+
+    try {
+      const response = await fetch("/api/outreach/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contact: {
+            name: editingContact.name,
+            firstName: editingContact.firstName,
+            company: editingContact.company,
+            role: editingContact.role,
+            headline: editingContact.headline,
+            linkedinUrl: editingContact.linkedinUrl,
+            location: editingContact.location,
+          },
+          tone: emailTone,
+          purpose: emailPurpose,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to generate email")
+      }
+
+      const data = await response.json()
+      const emailData = {
+        subject: data.email.subject,
+        message: data.email.message,
+      }
+      setGeneratedEmail(emailData)
+      
+      // Auto-save the generated email
+      if (editingContact) {
+        try {
+          await createMessage({
+            contactId: editingContact._id,
+            contactName: editingContact.name,
+            company: editingContact.company,
+            message: `Subject: ${emailData.subject}\n\n${emailData.message}`,
+            tone: emailTone,
+          })
+          toast.success("Email generated and saved!", {
+            description: "Your personalized outreach email has been saved to Outreach Messages.",
+          })
+        } catch (saveError) {
+          console.error("Error auto-saving email:", saveError)
+          toast.success("Email generated successfully!", {
+            description: "Your personalized outreach email is ready. You can save it manually.",
+          })
+        }
+      } else {
+        toast.success("Email generated successfully!", {
+          description: "Your personalized outreach email is ready.",
+        })
+      }
+    } catch (error) {
+      console.error("Error generating email:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to generate email", {
+        description: "Please try again or check your connection.",
+      })
+    } finally {
+      setIsGeneratingEmail(false)
+    }
+  }
+
+  const handleSaveEmail = async () => {
+    if (!editingContact || !generatedEmail) return
+
+    try {
+      await createMessage({
+        contactId: editingContact._id,
+        contactName: editingContact.name,
+        company: editingContact.company,
+        message: `Subject: ${generatedEmail.subject}\n\n${generatedEmail.message}`,
+        tone: emailTone,
+      })
+      toast.success("Email saved to outreach messages", {
+        description: "The email has been added to your outreach drafts.",
+      })
+      setEditingContact(null)
+      setGeneratedEmail(null)
+      setEmailPurpose("")
+    } catch (error) {
+      console.error("Error saving email:", error)
+      toast.error("Failed to save email", {
+        description: "Please try again.",
+      })
+    }
+  }
+
+  const handleCopyEmail = () => {
+    if (!generatedEmail) return
+    const fullEmail = `Subject: ${generatedEmail.subject}\n\n${generatedEmail.message}`
+    navigator.clipboard.writeText(fullEmail)
+    toast.success("Email copied to clipboard", {
+      description: "The email has been copied to your clipboard.",
+    })
+  }
+
+  const columns: ColumnDef<ContactDoc>[] = [
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => {
+        const contact = row.original
+        return (
+          <div className="flex items-center gap-3">
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={contact.avatar || "/placeholder.svg?height=32&width=32"} />
+              <AvatarFallback>
+                {contact.name
+                  .split(" ")
+                  .map((part) => part[0])
+                  .join("")}
+              </AvatarFallback>
+            </Avatar>
+            <span className="font-medium">{contact.name}</span>
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: "company",
+      header: "Company",
+      cell: ({ row }) => row.original.company,
+    },
+    {
+      accessorKey: "primaryEmail",
+      header: "Email",
+      cell: ({ row }) => {
+        const email = row.original.primaryEmail
+        return email ? (
+          <a href={`mailto:${email}`} className="text-primary hover:underline">
+            {email}
+          </a>
+        ) : (
+          <span className="text-muted-foreground">No email</span>
+        )
+      },
+    },
+    {
+      id: "actions",
+      header: "Edit",
+      cell: ({ row }) => {
+        const contact = row.original
+        return (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setEditingContact(contact)
+              setGeneratedEmail(null)
+              setEmailPurpose("")
+            }}
+          >
+            <Edit className="mr-2 h-4 w-4" />
+            Edit
+          </Button>
+        )
+      },
+    },
+  ]
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -209,79 +408,7 @@ function OutreachContent() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead className="text-right">Stage</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {searchResults.map((contact) => (
-                  <TableRow key={contact._id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar>
-                          <AvatarImage src={contact.avatar || "/placeholder.svg?height=40&width=40"} />
-                          <AvatarFallback>
-                            {contact.name
-                              .split(" ")
-                              .map((part) => part[0])
-                              .join("")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium">{contact.name}</p>
-                          <p className="text-sm text-muted-foreground">{contact.company}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{contact.role}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <MapPin className="h-3 w-3" />
-                        {getLocationDisplay(contact)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        {contact.primaryEmail && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => toast("Email copied", { description: contact.primaryEmail! })}
-                          >
-                            <Mail className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {contact.linkedinUrl && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            asChild
-                          >
-                            <a href={contact.linkedinUrl} target="_blank" rel="noreferrer">
-                              <Linkedin className="h-4 w-4" />
-                            </a>
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button size="sm" variant="outline" onClick={() => handleAddToContacts(contact)}>
-                        <Plus className="mr-1 h-3 w-3" />
-                        Add to Sequence
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <DataTable columns={columns} data={searchResults} />
           </CardContent>
         </Card>
       )}
@@ -293,29 +420,6 @@ function OutreachContent() {
             <Search className="h-12 w-12 text-muted-foreground" />
             <h3 className="mt-4 text-lg font-semibold">No matching contacts</h3>
             <p className="text-sm text-muted-foreground">Try refining your search terms.</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Outreach History */}
-      {outreachSearches && outreachSearches.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Searches</CardTitle>
-            <CardDescription>Your latest outreach lookups</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-2">
-            {outreachSearches.slice(0, 6).map((search) => (
-              <div key={search._id} className="rounded-lg border p-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">{search.query}</span>
-                  <Badge variant="outline">{search.resultsCount} results</Badge>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {new Date(search.searchedAt).toLocaleString()}
-                </p>
-              </div>
-            ))}
           </CardContent>
         </Card>
       )}
@@ -346,46 +450,255 @@ function OutreachContent() {
             </div>
           ) : suggestions.length === 0 ? (
             <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-              No outreach drafts yet. Run a search to generate suggestions.
+              No outreach messages yet. Generate an email for a contact to get started.
             </div>
           ) : (
             <div className="space-y-4">
-              {suggestions.map((suggestion) => (
-                <Card key={suggestion._id}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="text-base">{suggestion.contactName}</CardTitle>
-                        <CardDescription>{suggestion.company}</CardDescription>
+              {suggestions.map((suggestion) => {
+                const isEditing = editingMessageId === suggestion._id
+                return (
+                  <Card key={suggestion._id}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="text-base">{suggestion.contactName}</CardTitle>
+                          <CardDescription>{suggestion.company}</CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {!isEditing && (
+                            <>
+                              <Badge variant="outline" className="capitalize">
+                                {suggestion.tone}
+                              </Badge>
+                              <Badge variant={suggestion.sent ? "default" : "secondary"}>
+                                {suggestion.statusLabel}
+                              </Badge>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="capitalize">
-                          {suggestion.tone}
-                        </Badge>
-                        <Badge variant={suggestion.sent ? "default" : "secondary"}>
-                          {suggestion.statusLabel}
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">{suggestion.message}</p>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => handleCopyMessage(suggestion.message)}>
-                        Copy Message
-                      </Button>
-                      <Button size="sm" onClick={() => handleMarkSent(suggestion)} disabled={suggestion.sent}>
-                        <Mail className="mr-1 h-3 w-3" />
-                        {suggestion.sent ? "Sent" : "Mark as Sent"}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardHeader>
+                    <CardContent>
+                      {isEditing ? (
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label>Message</Label>
+                            <Textarea
+                              value={editingMessageText}
+                              onChange={(e) => setEditingMessageText(e.target.value)}
+                              rows={8}
+                              className="font-mono text-sm"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Tone</Label>
+                            <Select
+                              value={editingMessageTone}
+                              onValueChange={(value: "professional" | "casual" | "friendly") =>
+                                setEditingMessageTone(value)
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="professional">Professional</SelectItem>
+                                <SelectItem value="casual">Casual</SelectItem>
+                                <SelectItem value="friendly">Friendly</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await updateMessage({
+                                    messageId: suggestion._id,
+                                    message: editingMessageText,
+                                    tone: editingMessageTone,
+                                  })
+                                  toast.success("Message updated", {
+                                    description: "Your changes have been saved.",
+                                  })
+                                  setEditingMessageId(null)
+                                } catch (error) {
+                                  console.error("Error updating message:", error)
+                                  toast.error("Failed to update message", {
+                                    description: "Please try again.",
+                                  })
+                                }
+                              }}
+                            >
+                              Save Changes
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEditingMessageId(null)
+                                setEditingMessageText("")
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
+                            {suggestion.message}
+                          </p>
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEditingMessageId(suggestion._id)
+                                setEditingMessageText(suggestion.message)
+                                setEditingMessageTone(suggestion.tone)
+                              }}
+                            >
+                              <Edit className="mr-1 h-3 w-3" />
+                              Edit
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => handleCopyMessage(suggestion.message)}>
+                              Copy Message
+                            </Button>
+                            <Button size="sm" onClick={() => handleMarkSent(suggestion)} disabled={suggestion.sent}>
+                              <Mail className="mr-1 h-3 w-3" />
+                              {suggestion.sent ? "Sent" : "Mark as Sent"}
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                )
+              })}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Generate Outreach Email Dialog */}
+      <Dialog
+        open={!!editingContact}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingContact(null)
+            setGeneratedEmail(null)
+            setEmailPurpose("")
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Generate Outreach Email</DialogTitle>
+            <DialogDescription>
+              {editingContact && `Create a personalized email for ${editingContact.name} at ${editingContact.company}`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {editingContact && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Contact Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Name</Label>
+                    <p className="text-sm font-medium">{editingContact.name}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Company</Label>
+                    <p className="text-sm font-medium">{editingContact.company}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Role</Label>
+                    <p className="text-sm font-medium">{editingContact.role}</p>
+                  </div>
+                  {editingContact.primaryEmail && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Email</Label>
+                      <p className="text-sm font-medium">{editingContact.primaryEmail}</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="purpose">Email Purpose</Label>
+                <Textarea
+                  id="purpose"
+                  placeholder="e.g., Introduce our B2B SaaS platform that helps engineering teams..."
+                  value={emailPurpose}
+                  onChange={(e) => setEmailPurpose(e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="tone">Tone</Label>
+                <Select value={emailTone} onValueChange={(value: "professional" | "casual" | "friendly") => setEmailTone(value)}>
+                  <SelectTrigger id="tone">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="professional">Professional</SelectItem>
+                    <SelectItem value="casual">Casual</SelectItem>
+                    <SelectItem value="friendly">Friendly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button
+                onClick={handleGenerateEmail}
+                disabled={isGeneratingEmail || !emailPurpose.trim()}
+                className="w-full"
+              >
+                {isGeneratingEmail ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="mr-2 h-4 w-4" />
+                    Generate Outreach Email with AI
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {generatedEmail && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Generated Email</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Subject</Label>
+                    <p className="text-sm font-medium">{generatedEmail.subject}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Message</Label>
+                    <p className="text-sm whitespace-pre-line text-muted-foreground">{generatedEmail.message}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={handleCopyEmail}>
+                      <Mail className="mr-2 h-4 w-4" />
+                      Copy Email
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

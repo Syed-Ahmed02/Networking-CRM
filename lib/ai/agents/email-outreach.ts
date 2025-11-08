@@ -57,12 +57,16 @@ export async function generateOutreachEmail(
   } = input;
 
   const firstName = contact.firstName || contact.name.split(' ')[0];
+  const defaultCallToAction = callToAction || 'Schedule a brief call to discuss how we can help';
 
   try {
     const result = await generateObject({
       model,
       schema: OutreachMessageSchema,
+      temperature: 0.7,
       prompt: `You are an expert email outreach writer. Create a personalized, compelling outreach email.
+
+IMPORTANT: You must return a valid JSON object. All string values must be properly escaped for JSON. Use \\n for line breaks, not actual newlines.
 
 CONTACT INFORMATION:
 - Name: ${contact.name}
@@ -82,7 +86,7 @@ ${senderInfo.role ? `- Role: ${senderInfo.role}` : ''}
 EMAIL REQUIREMENTS:
 - Tone: ${tone}
 - Purpose: ${purpose}
-${callToAction ? `- Call to Action: ${callToAction}` : '- Include a clear, specific call to action'}
+- Call to Action: ${defaultCallToAction}
 ${additionalContext ? `- Additional Context: ${additionalContext}` : ''}
 
 INSTRUCTIONS:
@@ -91,7 +95,7 @@ INSTRUCTIONS:
    - Personalized greeting using their first name
    - Brief, relevant personalization (reference their role, company, or headline)
    - Clear value proposition or reason for reaching out
-   - Specific call to action
+   - Specific call to action: "${defaultCallToAction}"
    - Professional closing
 3. Keep the email concise (150-250 words)
 4. Match the specified tone: ${tone}
@@ -110,12 +114,96 @@ AVOID:
 - Using buzzwords or corporate jargon excessively
 - Writing overly long emails
 
-Return the structured email data following the schema.`,
+CRITICAL JSON FORMATTING REQUIREMENTS:
+- You MUST return valid JSON that can be parsed by a JSON parser
+- All newlines in the "message" field MUST be escaped as \\n (backslash followed by n)
+- Do NOT use actual line breaks in JSON string values
+- Escape all special characters: quotes as \\", backslashes as \\\\
+- The message field should be a single string with \\n for line breaks
+
+Example of correct format:
+{
+  "subject": "Example Subject Line",
+  "message": "Dear John,\\n\\nThis is the first paragraph.\\n\\nThis is the second paragraph.\\n\\nBest regards,\\nYour Name",
+  "tone": "${tone}",
+  "callToAction": "${defaultCallToAction}",
+  "personalizationNotes": "Notes here"
+}
+
+Return ONLY valid JSON, no markdown code blocks, no explanations, just the JSON object.`,
     });
 
+    // Validate the result
+    if (!result.object) {
+      throw new Error('No object generated: The AI model did not return a valid response');
+    }
+
     return result.object;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Email generation error:', error);
+    
+    // Log more details for debugging
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+      });
+    }
+
+    // Check if we have a text response we can try to repair
+    if (error?.cause?.text) {
+      try {
+        let text = error.cause.text.trim();
+        
+        // Remove markdown code blocks if present
+        text = text.replace(/^```json\n?/i, '').replace(/```\s*$/, '').trim();
+        
+        // Try to repair JSON by fixing newlines inside string values
+        // This regex finds string values and replaces literal newlines with escaped ones
+        let repairedText = text;
+        let inString = false;
+        let escapeNext = false;
+        let result = '';
+        
+        for (let i = 0; i < text.length; i++) {
+          const char = text[i];
+          
+          if (escapeNext) {
+            result += char;
+            escapeNext = false;
+            continue;
+          }
+          
+          if (char === '\\') {
+            escapeNext = true;
+            result += char;
+            continue;
+          }
+          
+          if (char === '"' && !escapeNext) {
+            inString = !inString;
+            result += char;
+            continue;
+          }
+          
+          if (inString && (char === '\n' || char === '\r')) {
+            result += '\\n';
+            if (char === '\r' && text[i + 1] === '\n') {
+              i++; // Skip the \n after \r
+            }
+          } else {
+            result += char;
+          }
+        }
+        
+        const parsed = JSON.parse(result);
+        console.log('Successfully repaired JSON');
+        return parsed as OutreachMessageData;
+      } catch (repairError) {
+        console.error('Failed to repair JSON:', repairError);
+      }
+    }
+    
     throw new Error(`Failed to generate email: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
