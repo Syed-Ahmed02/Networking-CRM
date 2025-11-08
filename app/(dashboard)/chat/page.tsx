@@ -31,6 +31,8 @@ function ChatContent() {
   const sessionId = searchParams.get('sessionId') as Id<"chatHistory"> | null
   
   const [input, setInput] = useState('')
+  const [currentSessionId, setCurrentSessionId] = useState<Id<"chatHistory"> | null>(sessionId)
+  
   const chatSession = useQuery(
     api.chat.getChatSession,
     sessionId ? { sessionId } : "skip"
@@ -53,6 +55,11 @@ function ChatContent() {
   // Track the last loaded session ID to avoid reloading the same session
   const lastLoadedSessionId = useRef<string | null>(null)
   
+  // Update currentSessionId when sessionId from URL changes
+  useEffect(() => {
+    setCurrentSessionId(sessionId)
+  }, [sessionId])
+  
   // Load messages when session changes
   useEffect(() => {
     if (chatSession && initialMessages.length > 0) {
@@ -60,11 +67,13 @@ function ChatContent() {
       if (lastLoadedSessionId.current !== chatSession._id) {
         setMessages(initialMessages)
         lastLoadedSessionId.current = chatSession._id
+        setCurrentSessionId(chatSession._id)
       }
     } else if (!sessionId && lastLoadedSessionId.current !== null) {
       // Reset to empty if no session selected
       setMessages([])
       lastLoadedSessionId.current = null
+      setCurrentSessionId(null)
     }
   }, [chatSession?._id, initialMessages, sessionId, setMessages])
   
@@ -107,6 +116,12 @@ function ChatContent() {
             parts: msg.parts,
           })),
           toolResults,
+          sessionId: currentSessionId || undefined, // Use currentSessionId (from URL or newly created)
+        }).then((newSessionId) => {
+          // If we created a new session, track its ID for future saves
+          if (!currentSessionId && newSessionId) {
+            setCurrentSessionId(newSessionId as Id<"chatHistory">)
+          }
         }).catch((error) => {
           console.error('Error saving chat history:', error)
         })
@@ -114,7 +129,7 @@ function ChatContent() {
 
       return () => clearTimeout(timeoutId)
     }
-  }, [messages, isLoading, saveChatHistory])
+  }, [messages, isLoading, saveChatHistory, currentSessionId])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()

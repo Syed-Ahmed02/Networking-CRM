@@ -7,6 +7,7 @@ export const saveChatHistory = mutation({
   args: {
     messages: v.array(v.any()),
     toolResults: v.optional(v.array(v.any())),
+    sessionId: v.optional(v.id("chatHistory")),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -16,32 +17,28 @@ export const saveChatHistory = mutation({
 
     const now = Date.now();
 
-    // Get the most recent chat history for this user
-    const existingChat = await ctx.db
-      .query("chatHistory")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .order("desc")
-      .first();
-
-    if (existingChat) {
-      // Update existing chat history
-      await ctx.db.patch(existingChat._id, {
-        messages: args.messages,
-        toolResults: args.toolResults,
-        updatedAt: now,
-      });
-      return existingChat._id;
-    } else {
-      // Create new chat history
-      const chatId = await ctx.db.insert("chatHistory", {
-        userId,
-        messages: args.messages,
-        toolResults: args.toolResults,
-        createdAt: now,
-        updatedAt: now,
-      });
-      return chatId;
+    // If a sessionId is provided, update that specific session
+    if (args.sessionId) {
+      const session = await ctx.db.get(args.sessionId);
+      if (session && session.userId === userId) {
+        await ctx.db.patch(args.sessionId, {
+          messages: args.messages,
+          toolResults: args.toolResults,
+          updatedAt: now,
+        });
+        return args.sessionId;
+      }
     }
+
+    // Otherwise, create a new chat session
+    const chatId = await ctx.db.insert("chatHistory", {
+      userId,
+      messages: args.messages,
+      toolResults: args.toolResults,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return chatId;
   },
 });
 
