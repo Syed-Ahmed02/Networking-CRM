@@ -4,13 +4,20 @@ import { getAuthUserId } from "./helpers";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
-type UserIdentity = NonNullable<
-  Awaited<ReturnType<MutationCtx["auth"]["getUserIdentity"]>>
->;
+type IdentityInput = {
+  subject: string;
+  tokenIdentifier?: string | null;
+  issuer?: string | null;
+  name?: string | null;
+  givenName?: string | null;
+  familyName?: string | null;
+  email?: string | null;
+  pictureUrl?: string | null;
+};
 
 async function persistUserFromIdentity(
   ctx: MutationCtx,
-  identity: UserIdentity,
+  identity: IdentityInput,
 ) {
   const tokenIdentifier =
     identity.tokenIdentifier ??
@@ -37,6 +44,7 @@ async function persistUserFromIdentity(
   const email =
     identity.email ??
     `${identity.subject.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}@example.com`;
+  const avatar = identity.pictureUrl ?? undefined;
 
   if (existing) {
     const updates: Partial<Doc<"users">> = { updatedAt: now };
@@ -53,8 +61,8 @@ async function persistUserFromIdentity(
     if (existing.email !== email) {
       updates.email = email;
     }
-    if (existing.avatar !== identity.pictureUrl) {
-      updates.avatar = identity.pictureUrl ?? undefined;
+    if (existing.avatar !== avatar) {
+      updates.avatar = avatar;
     }
     if (existing.tokenIdentifier !== tokenIdentifier) {
       updates.tokenIdentifier = tokenIdentifier;
@@ -73,7 +81,7 @@ async function persistUserFromIdentity(
     firstName,
     lastName,
     email,
-    avatar: identity.pictureUrl ?? undefined,
+    avatar,
     createdAt: now,
     updatedAt: now,
   });
@@ -88,7 +96,16 @@ export const store = mutation({
       throw new Error("Called store without authentication");
     }
 
-    return persistUserFromIdentity(ctx, identity);
+    return persistUserFromIdentity(ctx, {
+      subject: identity.subject,
+      tokenIdentifier: identity.tokenIdentifier ?? undefined,
+      issuer: identity.issuer ?? undefined,
+      name: identity.name ?? undefined,
+      givenName: identity.givenName ?? undefined,
+      familyName: identity.familyName ?? undefined,
+      email: identity.email ?? undefined,
+      pictureUrl: identity.pictureUrl ?? undefined,
+    });
   },
 });
 
@@ -239,6 +256,15 @@ export const ensureCurrentUser = mutation({
       throw new Error("Called ensureCurrentUser without authentication present");
     }
 
-    return persistUserFromIdentity(ctx, identity);
+    return persistUserFromIdentity(ctx, {
+      subject: identity.subject,
+      tokenIdentifier: identity.tokenIdentifier ?? undefined,
+      issuer: identity.issuer ?? undefined,
+      name: identity.name ?? undefined,
+      givenName: identity.givenName ?? undefined,
+      familyName: identity.familyName ?? undefined,
+      email: identity.email ?? undefined,
+      pictureUrl: identity.pictureUrl ?? undefined,
+    });
   },
 });
