@@ -1,7 +1,7 @@
 import { internalMutation } from "./_generated/server"
 import type { Id } from "./_generated/dataModel"
 
-const DEFAULT_USER_ID = "kn72yht4m293r5ttra96p8j9497tzknp"
+const DEFAULT_CLERK_USER_ID = "kn72yht4m293r5ttra96p8j9497tzknp"
 
 type ContactSeed = {
   name: string
@@ -110,23 +110,14 @@ export const init = internalMutation({
   handler: async (ctx) => {
     const now = Date.now()
 
-    const existingContacts = await ctx.db
-      .query("contacts")
-      .withIndex("by_user", (q) => q.eq("userId", DEFAULT_USER_ID))
-      .take(1)
-
-    if (existingContacts.length > 0) {
-      return { status: "skipped", reason: "Contacts already seeded" }
-    }
-
     let userDoc = await ctx.db
       .query("users")
-      .withIndex("by_clerk_user", (q) => q.eq("clerkUserId", DEFAULT_USER_ID))
+      .withIndex("by_clerk_user", (q) => q.eq("clerkUserId", DEFAULT_CLERK_USER_ID))
       .first()
 
     if (!userDoc) {
       const userId = await ctx.db.insert("users", {
-        clerkUserId: DEFAULT_USER_ID,
+        clerkUserId: DEFAULT_CLERK_USER_ID,
         firstName: "Alex",
         lastName: "Morgan",
         email: "alex.morgan@example.com",
@@ -142,13 +133,28 @@ export const init = internalMutation({
       userDoc = await ctx.db.get(userId)
     }
 
+    if (!userDoc) {
+      throw new Error("Failed to ensure default user for seeding")
+    }
+
+    const userId = userDoc._id
+
+    const existingContacts = await ctx.db
+      .query("contacts")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .take(1)
+
+    if (existingContacts.length > 0) {
+      return { status: "skipped", reason: "Contacts already seeded" }
+    }
+
     const contactIds: Id<"contacts">[] = []
 
     for (let index = 0; index < contactSeeds.length; index++) {
       const seed = contactSeeds[index]
       const createdAt = now - index * 1000 * 60 * 60 * 24
       const contactId = await ctx.db.insert("contacts", {
-        userId: DEFAULT_USER_ID,
+        userId,
         name: seed.name,
         firstName: seed.firstName,
         lastName: seed.lastName,
@@ -225,7 +231,7 @@ export const init = internalMutation({
       const contactId = contactIds[recommendation.contactIndex]
       if (!contactId) continue
       await ctx.db.insert("followUpRecommendations", {
-        userId: DEFAULT_USER_ID,
+        userId,
         contactId,
         action: recommendation.action,
         priority: recommendation.priority,
@@ -271,7 +277,7 @@ export const init = internalMutation({
     for (const event of calendarSeeds) {
       const contactId = contactIds[event.contactIndex]
       await ctx.db.insert("calendarEvents", {
-        userId: DEFAULT_USER_ID,
+        userId,
         contactId,
         title: event.title,
         date: event.date,
@@ -319,7 +325,7 @@ export const init = internalMutation({
     for (const msg of messageSeeds) {
       const contactId = contactIds[msg.contactIndex]
       await ctx.db.insert("outreachMessages", {
-        userId: DEFAULT_USER_ID,
+        userId,
         contactId,
         contactName: msg.contactName,
         company: msg.company,
@@ -332,7 +338,7 @@ export const init = internalMutation({
 
       if (msg.sent) {
         await ctx.db.insert("activityLog", {
-          userId: DEFAULT_USER_ID,
+          userId,
           type: "email_sent",
           contactId,
           eventId: undefined,
@@ -350,7 +356,7 @@ export const init = internalMutation({
 
     for (const search of searches) {
       await ctx.db.insert("outreachSearches", {
-        userId: DEFAULT_USER_ID,
+        userId,
         query: search.query,
         resultsCount: search.resultsCount,
         searchedAt: search.searchedAt,
@@ -358,7 +364,7 @@ export const init = internalMutation({
     }
 
     await ctx.db.insert("integrations", {
-      userId: DEFAULT_USER_ID,
+      userId,
       type: "apollo",
       apiKey: "seed-apollo-key",
       refreshToken: undefined,
@@ -371,7 +377,7 @@ export const init = internalMutation({
     })
 
     await ctx.db.insert("integrations", {
-      userId: DEFAULT_USER_ID,
+      userId,
       type: "google_calendar",
       apiKey: undefined,
       refreshToken: undefined,
@@ -384,7 +390,7 @@ export const init = internalMutation({
     })
 
     await ctx.db.insert("importHistory", {
-      userId: DEFAULT_USER_ID,
+      userId,
       fileName: "conference_contacts.csv",
       contactsImported: 45,
       status: "success",
@@ -393,7 +399,7 @@ export const init = internalMutation({
     })
 
     await ctx.db.insert("importHistory", {
-      userId: DEFAULT_USER_ID,
+      userId,
       fileName: "meetup_leads.csv",
       contactsImported: 28,
       status: "success",
@@ -405,7 +411,7 @@ export const init = internalMutation({
       const contactId = contactIds[i]
       const contactSeed = contactSeeds[i]
       await ctx.db.insert("activityLog", {
-        userId: DEFAULT_USER_ID,
+        userId,
         type: "contact_added",
         contactId,
         eventId: undefined,

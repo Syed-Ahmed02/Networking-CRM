@@ -12,12 +12,7 @@ export const getCurrent = query({
       return null;
     }
 
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_user", (q) => q.eq("clerkUserId", userId))
-      .first();
-
-    return user;
+    return await ctx.db.get(userId);
   },
 });
 
@@ -30,12 +25,11 @@ export const get = query({
       throw new Error("Not authenticated");
     }
 
-    const user = await ctx.db.get(args.userId);
-    if (!user || user.clerkUserId !== currentUserId) {
+    if (args.userId !== currentUserId) {
       return null;
     }
 
-    return user;
+    return await ctx.db.get(args.userId);
   },
 });
 
@@ -54,16 +48,16 @@ export const upsert = mutation({
     avatar: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId || userId !== args.clerkUserId) {
-      throw new Error("Not authenticated or unauthorized");
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    if (identity.subject !== args.clerkUserId) {
+      throw new Error("Unauthorized");
     }
 
-    // Check if user already exists
-    const existing = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_user", (q) => q.eq("clerkUserId", args.clerkUserId))
-      .first();
+    const existingId = await getAuthUserId(ctx);
+    const existing = existingId ? await ctx.db.get(existingId) : null;
 
     const now = Date.now();
 
@@ -121,11 +115,7 @@ export const update = mutation({
       throw new Error("Not authenticated");
     }
 
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_user", (q) => q.eq("clerkUserId", userId))
-      .first();
-
+    const user = await ctx.db.get(userId);
     if (!user) {
       throw new Error("User profile not found");
     }
@@ -144,9 +134,9 @@ export const update = mutation({
     if (args.linkedin !== undefined) updates.linkedin = args.linkedin;
     if (args.avatar !== undefined) updates.avatar = args.avatar;
 
-    await ctx.db.patch(user._id, updates);
+    await ctx.db.patch(userId, updates);
 
-    return user._id;
+    return userId;
   },
 });
 

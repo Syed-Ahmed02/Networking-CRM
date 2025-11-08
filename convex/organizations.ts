@@ -48,8 +48,9 @@ export const getByApolloId = query({
 
     return await ctx.db
       .query("organizations")
-      .withIndex("by_apollo_org_id", (q) => q.eq("apolloOrganizationId", args.apolloOrganizationId))
-      .filter((q) => q.eq(q.field("userId"), userId))
+      .withIndex("by_user_apollo_org_id", (q) =>
+        q.eq("userId", userId).eq("apolloOrganizationId", args.apolloOrganizationId)
+      )
       .first();
   },
 });
@@ -65,8 +66,7 @@ export const getByDomain = query({
 
     return await ctx.db
       .query("organizations")
-      .withIndex("by_domain", (q) => q.eq("domain", args.domain))
-      .filter((q) => q.eq(q.field("userId"), userId))
+      .withIndex("by_user_domain", (q) => q.eq("userId", userId).eq("domain", args.domain))
       .first();
   },
 });
@@ -202,8 +202,9 @@ export const upsertByApolloId = mutation({
     // Check if organization already exists
     const existing = await ctx.db
       .query("organizations")
-      .withIndex("by_apollo_org_id", (q) => q.eq("apolloOrganizationId", args.apolloOrganizationId))
-      .filter((q) => q.eq(q.field("userId"), userId))
+      .withIndex("by_user_apollo_org_id", (q) =>
+        q.eq("userId", userId).eq("apolloOrganizationId", args.apolloOrganizationId)
+      )
       .first();
 
     const now = Date.now();

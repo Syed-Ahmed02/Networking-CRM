@@ -26,13 +26,11 @@ export const list = query({
         .order("desc");
     }
 
-    const activities = await query.collect();
-
     if (args.limit) {
-      return activities.slice(0, args.limit);
+      return await query.take(args.limit);
     }
 
-    return activities;
+    return await query.collect();
   },
 });
 
@@ -69,15 +67,12 @@ export const listByDateRange = query({
       throw new Error("Not authenticated");
     }
 
-    const allActivities = await ctx.db
+    return await ctx.db
       .query("activityLog")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_user_date", (q) =>
+        q.eq("userId", userId).gte("createdAt", args.startDate).lte("createdAt", args.endDate)
+      )
       .collect();
-
-    return allActivities.filter(
-      (activity) =>
-        activity.createdAt >= args.startDate && activity.createdAt <= args.endDate
-    );
   },
 });
 

@@ -48,14 +48,12 @@ export const listByDateRange = query({
       throw new Error("Not authenticated");
     }
 
-    const allEvents = await ctx.db
+    return await ctx.db
       .query("calendarEvents")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_user_date", (q) =>
+        q.eq("userId", userId).gte("date", args.startDate).lte("date", args.endDate)
+      )
       .collect();
-
-    return allEvents.filter(
-      (event) => event.date >= args.startDate && event.date <= args.endDate
-    );
   },
 });
 

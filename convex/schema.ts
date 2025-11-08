@@ -21,7 +21,7 @@ export default defineSchema({
 
   // Organizations table
   organizations: defineTable({
-    userId: v.string(),
+    userId: v.id("users"),
     apolloOrganizationId: v.optional(v.string()),
     apolloAccountId: v.optional(v.string()),
     name: v.string(),
@@ -42,11 +42,13 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_apollo_org_id", ["apolloOrganizationId"])
-    .index("by_domain", ["domain"]),
+    .index("by_domain", ["domain"])
+    .index("by_user_apollo_org_id", ["userId", "apolloOrganizationId"])
+    .index("by_user_domain", ["userId", "domain"]),
 
   // Contacts table
   contacts: defineTable({
-    userId: v.string(),
+    userId: v.id("users"),
     name: v.string(),
     firstName: v.optional(v.string()),
     lastName: v.optional(v.string()),
@@ -124,7 +126,7 @@ export default defineSchema({
 
   // Calendar events table
   calendarEvents: defineTable({
-    userId: v.string(),
+    userId: v.id("users"),
     contactId: v.optional(v.id("contacts")),
     title: v.string(),
     date: v.string(),
@@ -143,7 +145,7 @@ export default defineSchema({
 
   // Outreach searches table
   outreachSearches: defineTable({
-    userId: v.string(),
+    userId: v.id("users"),
     query: v.string(),
     resultsCount: v.number(),
     searchedAt: v.number(),
@@ -153,7 +155,7 @@ export default defineSchema({
 
   // Outreach messages table
   outreachMessages: defineTable({
-    userId: v.string(),
+    userId: v.id("users"),
     contactId: v.optional(v.id("contacts")),
     contactName: v.string(),
     company: v.string(),
@@ -169,7 +171,7 @@ export default defineSchema({
 
   // Integrations table
   integrations: defineTable({
-    userId: v.string(),
+    userId: v.id("users"),
     type: v.union(v.literal("apollo"), v.literal("google_calendar")),
     apiKey: v.optional(v.string()),
     refreshToken: v.optional(v.string()),
@@ -185,7 +187,7 @@ export default defineSchema({
 
   // Import history table
   importHistory: defineTable({
-    userId: v.string(),
+    userId: v.id("users"),
     fileName: v.string(),
     contactsImported: v.number(),
     status: v.union(v.literal("success"), v.literal("failed"), v.literal("processing")),
@@ -197,7 +199,7 @@ export default defineSchema({
 
   // Activity log table
   activityLog: defineTable({
-    userId: v.string(),
+    userId: v.id("users"),
     type: v.union(
       v.literal("contact_added"),
       v.literal("contact_updated"),
@@ -218,7 +220,7 @@ export default defineSchema({
 
   // Follow-up recommendations table
   followUpRecommendations: defineTable({
-    userId: v.string(),
+    userId: v.id("users"),
     contactId: v.id("contacts"),
     action: v.string(),
     priority: v.union(v.literal("high"), v.literal("medium"), v.literal("low")),
