@@ -2,10 +2,21 @@
 
 import type { PropsWithChildren } from "react"
 import { Authenticated, AuthLoading, Unauthenticated } from "convex/react"
-import { SignInButton } from "@clerk/nextjs"
+import { useRouter } from "next/navigation"
+import { useEffect } from "react"
+import { useConvexAuth } from "convex/react"
 import { Loader2 } from "lucide-react"
 
 export function DashboardAuthBoundary({ children }: PropsWithChildren) {
+  const { isLoading, isAuthenticated } = useConvexAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push('/sign-in')
+    }
+  }, [isLoading, isAuthenticated, router])
+
   return (
     <>
       <AuthLoading>
@@ -15,14 +26,8 @@ export function DashboardAuthBoundary({ children }: PropsWithChildren) {
       </AuthLoading>
 
       <Unauthenticated>
-        <div className="flex min-h-[300px] w-full flex-col items-center justify-center gap-4 text-center">
-          <div>
-            <p className="text-lg font-semibold">Sign in required</p>
-            <p className="text-sm text-muted-foreground">
-              Please sign in with your Clerk account to view this workspace.
-            </p>
-          </div>
-          <SignInButton mode="modal">Sign in</SignInButton>
+        <div className="flex min-h-[300px] w-full items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       </Unauthenticated>
 

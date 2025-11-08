@@ -17,7 +17,7 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar"
 import { SignOutButton } from "@clerk/nextjs"
-import { useQuery } from "convex/react"
+import { useQuery, Authenticated, Unauthenticated } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { format } from "date-fns"
 
@@ -45,10 +45,13 @@ const navigationItems = [
   },
 ]
 
-export function AppSidebar() {
+// Component to render chat sessions list (only when authenticated)
+function ChatSessionsList() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const chatSessions = useQuery(api.chat.listChatSessions) ?? []
+  // useQuery returns undefined while loading, and will only be called when authenticated
+  // due to being wrapped in <Authenticated>
+  const chatSessions = useQuery(api.chat.listChatSessions)
 
   // Get the first message from each chat session to use as a title
   const getChatSessionTitle = (session: any) => {
@@ -62,6 +65,56 @@ export function AppSidebar() {
     }
     return "New Chat"
   }
+
+  // Show loading state while query is loading
+  if (chatSessions === undefined) {
+    return (
+      <SidebarMenuItem>
+        <div className="px-2 py-1 text-sm text-muted-foreground">
+          Loading sessions...
+        </div>
+      </SidebarMenuItem>
+    )
+  }
+
+  return (
+    <>
+      {chatSessions.length === 0 ? (
+        <SidebarMenuItem>
+          <div className="px-2 py-1 text-sm text-muted-foreground">
+            No previous sessions
+          </div>
+        </SidebarMenuItem>
+      ) : (
+        chatSessions.map((session) => (
+          <SidebarMenuItem key={session._id} className="min-w-0">
+            <SidebarMenuButton
+              asChild
+              isActive={pathname === "/chat" && searchParams.get('sessionId') === session._id}
+              className="flex flex-col items-start gap-1 h-auto py-2 min-w-0 w-full"
+            >
+              <Link href={`/chat?sessionId=${session._id}`} className="w-full min-w-0">
+                <div className="flex items-center gap-2 w-full min-w-0">
+                  <MessageSquare className="size-4 shrink-0" />
+                  <span className="text-xs font-medium truncate flex-1 min-w-0">
+                    {getChatSessionTitle(session)}
+                  </span>
+                </div>
+                <span className="text-xs text-muted-foreground ml-6 truncate block">
+                  {format(new Date(session.updatedAt), "MMM d, yyyy")}
+                </span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ))
+      )}
+    </>
+  )
+}
+
+export function AppSidebar() {
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
 
   return (
     <Sidebar>
@@ -106,35 +159,16 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               
-              {chatSessions.length === 0 ? (
+              <Authenticated>
+                <ChatSessionsList />
+              </Authenticated>
+              <Unauthenticated>
                 <SidebarMenuItem>
                   <div className="px-2 py-1 text-sm text-muted-foreground">
-                    No previous sessions
+                    Sign in to view chat sessions
                   </div>
                 </SidebarMenuItem>
-              ) : (
-                chatSessions.map((session) => (
-                  <SidebarMenuItem key={session._id} className="min-w-0">
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname === "/chat" && searchParams.get('sessionId') === session._id}
-                      className="flex flex-col items-start gap-1 h-auto py-2 min-w-0 w-full"
-                    >
-                      <Link href={`/chat?sessionId=${session._id}`} className="w-full min-w-0">
-                        <div className="flex items-center gap-2 w-full min-w-0">
-                          <MessageSquare className="size-4 shrink-0" />
-                          <span className="text-xs font-medium truncate flex-1 min-w-0">
-                            {getChatSessionTitle(session)}
-                          </span>
-                        </div>
-                        <span className="text-xs text-muted-foreground ml-6 truncate block">
-                          {format(new Date(session.updatedAt), "MMM d, yyyy")}
-                        </span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))
-              )}
+              </Unauthenticated>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
