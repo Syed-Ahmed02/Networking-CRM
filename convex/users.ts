@@ -2,6 +2,95 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthUserId } from "./helpers";
 import type { Doc } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
+
+type UserIdentity = NonNullable<
+  Awaited<ReturnType<MutationCtx["auth"]["getUserIdentity"]>>
+>;
+
+async function persistUserFromIdentity(
+  ctx: MutationCtx,
+  identity: UserIdentity,
+) {
+  const tokenIdentifier =
+    identity.tokenIdentifier ??
+    `${identity.subject}#${identity.issuer ?? "clerk"}`;
+  const now = Date.now();
+
+  const existing = await ctx.db
+    .query("users")
+    .withIndex("by_token", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+    .unique();
+
+  const nameParts =
+    identity.name
+      ?.trim()
+      .split(/\s+/)
+      .filter((part) => part.length > 0) ?? [];
+
+  const firstName =
+    identity.givenName ?? (nameParts.length > 0 ? nameParts[0] : "") ?? "User";
+  const lastName =
+    identity.familyName ??
+    (nameParts.length > 1 ? nameParts.slice(1).join(" ") : "") ??
+    "";
+  const email =
+    identity.email ??
+    `${identity.subject.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}@example.com`;
+
+  if (existing) {
+    const updates: Partial<Doc<"users">> = { updatedAt: now };
+
+    if (existing.clerkUserId !== identity.subject) {
+      updates.clerkUserId = identity.subject;
+    }
+    if (existing.firstName !== firstName) {
+      updates.firstName = firstName;
+    }
+    if (existing.lastName !== lastName) {
+      updates.lastName = lastName;
+    }
+    if (existing.email !== email) {
+      updates.email = email;
+    }
+    if (existing.avatar !== identity.pictureUrl) {
+      updates.avatar = identity.pictureUrl ?? undefined;
+    }
+    if (existing.tokenIdentifier !== tokenIdentifier) {
+      updates.tokenIdentifier = tokenIdentifier;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await ctx.db.patch(existing._id, updates);
+    }
+
+    return existing._id;
+  }
+
+  return await ctx.db.insert("users", {
+    clerkUserId: identity.subject,
+    tokenIdentifier,
+    firstName,
+    lastName,
+    email,
+    avatar: identity.pictureUrl ?? undefined,
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
+// Mutation: Persist the current authenticated user (called from client after sign-in)
+export const store = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Called store without authentication");
+    }
+
+    return persistUserFromIdentity(ctx, identity);
+  },
+});
 
 // Query: Get current user profile
 export const getCurrent = query({
@@ -150,64 +239,6 @@ export const ensureCurrentUser = mutation({
       throw new Error("Called ensureCurrentUser without authentication present");
     }
 
-    const now = Date.now();
-    const clerkUserId = identity.subject;
-    const nameParts =
-      identity.name
-        ?.trim()
-        .split(/\s+/)
-        .filter((part) => part.length > 0) ?? [];
-    const firstName =
-      identity.givenName ?? (nameParts.length > 0 ? nameParts[0] : "") ?? "";
-    const lastName =
-      identity.familyName ??
-      (nameParts.length > 1 ? nameParts.slice(1).join(" ") : "") ??
-      "";
-    const email = identity.email ?? "";
-    const avatar = identity.pictureUrl ?? undefined;
-
-    const existingUser = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_user", (q) => q.eq("clerkUserId", clerkUserId))
-      .first();
-
-    if (existingUser) {
-      const updates: Record<string, unknown> = { updatedAt: now };
-
-      if (firstName && firstName !== existingUser.firstName) {
-        updates.firstName = firstName;
-      }
-      if (lastName && lastName !== existingUser.lastName) {
-        updates.lastName = lastName;
-      }
-      if (email && email !== existingUser.email) {
-        updates.email = email;
-      }
-      if (avatar && avatar !== existingUser.avatar) {
-        updates.avatar = avatar;
-      }
-
-      if (Object.keys(updates).length > 1) {
-        await ctx.db.patch(existingUser._id, updates);
-      }
-
-      return existingUser._id;
-    }
-
-    const fallbackFirstName = firstName || nameParts[0] || "User";
-    const fallbackLastName = lastName || nameParts.slice(1).join(" ");
-    const fallbackEmail =
-      email ||
-      `${clerkUserId.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}@example.com`;
-
-    return await ctx.db.insert("users", {
-      clerkUserId,
-      firstName: fallbackFirstName,
-      lastName: fallbackLastName,
-      email: fallbackEmail,
-      ...(avatar ? { avatar } : {}),
-      createdAt: now,
-      updatedAt: now,
-    });
+    return persistUserFromIdentity(ctx, identity);
   },
 });

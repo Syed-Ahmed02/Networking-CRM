@@ -5,6 +5,7 @@ export default defineSchema({
   // Users table
   users: defineTable({
     clerkUserId: v.string(),
+    tokenIdentifier: v.optional(v.string()),
     firstName: v.string(),
     lastName: v.string(),
     email: v.string(),
@@ -17,7 +18,8 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_clerk_user", ["clerkUserId"]),
+    .index("by_clerk_user", ["clerkUserId"])
+    .index("by_token", ["tokenIdentifier"]),
 
   // Organizations table
   organizations: defineTable({

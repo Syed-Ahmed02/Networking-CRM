@@ -1,14 +1,13 @@
 'use client'
 
 import type { PropsWithChildren } from "react"
-import { Authenticated, AuthLoading, Unauthenticated } from "convex/react"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
-import { useConvexAuth } from "convex/react"
 import { Loader2 } from "lucide-react"
+import { useStoreUserEffect } from "@/hooks/use-store-user"
 
 export function DashboardAuthBoundary({ children }: PropsWithChildren) {
-  const { isLoading, isAuthenticated } = useConvexAuth()
+  const { isLoading, isAuthenticated } = useStoreUserEffect()
   const router = useRouter()
 
   useEffect(() => {
@@ -17,23 +16,19 @@ export function DashboardAuthBoundary({ children }: PropsWithChildren) {
     }
   }, [isLoading, isAuthenticated, router])
 
-  return (
-    <>
-      <AuthLoading>
-        <div className="flex min-h-[300px] w-full items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      </AuthLoading>
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[300px] w-full items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
-      <Unauthenticated>
-        <div className="flex min-h-[300px] w-full items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      </Unauthenticated>
+  if (!isAuthenticated) {
+    return null
+  }
 
-      <Authenticated>{children}</Authenticated>
-    </>
-  )
+  return <>{children}</>
 }
 
 
