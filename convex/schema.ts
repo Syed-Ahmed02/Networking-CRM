@@ -231,5 +231,16 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_active", ["userId", "dismissed"])
     .index("by_contact", ["contactId"]),
+
+  // Chat history table
+  chatHistory: defineTable({
+    userId: v.id("users"),
+    messages: v.array(v.any()),
+    toolResults: v.optional(v.array(v.any())),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_date", ["userId", "createdAt"]),
 });
 

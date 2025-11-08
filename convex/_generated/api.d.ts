@@ -10,6 +10,7 @@
 
 import type * as activityLog from "../activityLog.js";
 import type * as calendarEvents from "../calendarEvents.js";
+import type * as chat from "../chat.js";
 import type * as contacts from "../contacts.js";
 import type * as followUpRecommendations from "../followUpRecommendations.js";
 import type * as helpers from "../helpers.js";
@@ -37,6 +38,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   activityLog: typeof activityLog;
   calendarEvents: typeof calendarEvents;
+  chat: typeof chat;
   contacts: typeof contacts;
   followUpRecommendations: typeof followUpRecommendations;
   helpers: typeof helpers;

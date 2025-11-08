@@ -1,4 +1,4 @@
-import { streamText, convertToModelMessages, tool, UIMessage } from 'ai';
+import { streamText, convertToModelMessages, tool } from 'ai';
 import { z } from 'zod';
 import { model } from '@/lib/ai/config';
 import {
@@ -16,7 +16,7 @@ export const maxDuration = 60; // Longer timeout for agent operations
  */
 export async function POST(req: Request) {
   try {
-    const { messages }: { messages: UIMessage[] } = await req.json();
+    const { messages }: { messages: any[] } = await req.json();
 
     // Create tools for the AI to use
     const tools = {
@@ -116,3 +116,4 @@ Be helpful, concise, and provide actionable insights. Format your responses clea
     );
   }
 }
+

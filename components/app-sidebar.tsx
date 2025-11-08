@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Users, Send, Calendar, Settings } from "lucide-react"
+import { LayoutDashboard, Users, Send, Calendar, Settings, MessageSquare } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -32,6 +32,11 @@ const items = [
     title: "Outreach",
     url: "/outreach",
     icon: Send,
+  },
+  {
+    title: "Chat",
+    url: "/chat",
+    icon: MessageSquare,
   },
   {
     title: "Calendar",
