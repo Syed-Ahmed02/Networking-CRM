@@ -25,6 +25,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { DashboardAuthBoundary } from "../DashboardAuthBoundary"
+import { FullScreenCalendar } from "@/components/ui/fullscreen-calendar"
 
 type ContactDoc = Doc<"contacts"> & {
   primaryEmail?: string | null
@@ -101,7 +102,7 @@ function CalendarContent() {
     date.setHours(0, 0, 0, 0)
     return date
   })
-  const [view, setView] = useState<"month" | "week" | "day">("week")
+  const [view, setView] = useState<"month" | "week" | "day" | "fullscreen">("fullscreen")
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false)
   const [selectedEventId, setSelectedEventId] = useState<Id<"calendarEvents"> | null>(null)
   const [scheduleForm, setScheduleForm] = useState<ScheduleFormState>(createInitialScheduleForm(new Date()))
@@ -171,6 +172,61 @@ function CalendarContent() {
     [enrichedEvents],
   )
 
+  // Transform events for FullScreenCalendar component
+  const fullscreenCalendarData = useMemo(() => {
+    if (!enrichedEvents) return []
+    
+    // Group events by date
+    const eventsByDate = new Map<string, EventWithContact[]>()
+    
+    enrichedEvents.forEach((event) => {
+      const dateKey = event.date
+      if (!eventsByDate.has(dateKey)) {
+        eventsByDate.set(dateKey, [])
+      }
+      eventsByDate.get(dateKey)!.push(event)
+    })
+    
+    // Convert to FullScreenCalendar format
+    const calendarData: Array<{ day: Date; events: Array<{ id: number; name: string; time: string; datetime: string }> }> = []
+    let eventIdCounter = 1
+    
+    eventsByDate.forEach((events, dateKey) => {
+      const [year, month, day] = dateKey.split("-").map(Number)
+      const date = new Date(year, month - 1, day)
+      
+      const formattedEvents = events.map((event) => {
+        // Parse time (format: "HH:mm")
+        const [hours, minutes] = event.time.split(":").map(Number)
+        const eventDate = new Date(year, month - 1, day, hours, minutes)
+        
+        // Format time as "10:00 AM"
+        const timeString = eventDate.toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        })
+        
+        // Create datetime ISO string
+        const datetime = eventDate.toISOString()
+        
+        return {
+          id: eventIdCounter++, // Unique ID across all events
+          name: event.title,
+          time: timeString,
+          datetime: datetime,
+        }
+      })
+      
+      calendarData.push({
+        day: date,
+        events: formattedEvents,
+      })
+    })
+    
+    return calendarData
+  }, [enrichedEvents])
+
   const navigateMonth = (direction: number) => {
     const newDate = new Date(currentDate)
     newDate.setMonth(newDate.getMonth() + direction)
@@ -224,7 +280,7 @@ function CalendarContent() {
         type: scheduleForm.type,
         location: scheduleForm.location.trim() ? scheduleForm.location.trim() : undefined,
         notes: scheduleForm.notes.trim() ? scheduleForm.notes.trim() : undefined,
-        contactId: scheduleForm.contactId ? (scheduleForm.contactId as Id<"contacts">) : undefined,
+        contactId: scheduleForm.contactId && scheduleForm.contactId !== "none" ? (scheduleForm.contactId as Id<"contacts">) : undefined,
       })
 
       toast("Event scheduled", {
@@ -248,148 +304,7 @@ function CalendarContent() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Calendar</h1>
-          <p className="text-muted-foreground">Manage your meetings and calls</p>
-        </div>
-        <Dialog open={isScheduleDialogOpen} onOpenChange={setIsScheduleDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Schedule Call
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Schedule a Call</DialogTitle>
-              <DialogDescription>Schedule a meeting or call with a contact</DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="event-title">Title</Label>
-                <Input
-                  id="event-title"
-                  placeholder="Product Demo"
-                  value={scheduleForm.title}
-                  onChange={(event) => setScheduleForm((prev) => ({ ...prev, title: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="contact">Contact</Label>
-                <Select
-                  value={scheduleForm.contactId}
-                  onValueChange={(value) => setScheduleForm((prev) => ({ ...prev, contactId: value }))}
-                >
-                  <SelectTrigger id="contact">
-                    <SelectValue placeholder={isLoading ? "Loading contacts..." : "Select a contact"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">No contact</SelectItem>
-                    {contacts?.map((contact) => (
-                      <SelectItem key={contact._id} value={contact._id}>
-                        {contact.name} - {contact.company}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="date">Date</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={scheduleForm.date}
-                    onChange={(event) => setScheduleForm((prev) => ({ ...prev, date: event.target.value }))}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="time">Time</Label>
-                  <Input
-                    id="time"
-                    type="time"
-                    value={scheduleForm.time}
-                    onChange={(event) => setScheduleForm((prev) => ({ ...prev, time: event.target.value }))}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="duration">Duration (minutes)</Label>
-                  <Select
-                    value={scheduleForm.duration}
-                    onValueChange={(value) => setScheduleForm((prev) => ({ ...prev, duration: value }))}
-                  >
-                    <SelectTrigger id="duration">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="15">15 minutes</SelectItem>
-                      <SelectItem value="30">30 minutes</SelectItem>
-                      <SelectItem value="45">45 minutes</SelectItem>
-                      <SelectItem value="60">1 hour</SelectItem>
-                      <SelectItem value="90">1.5 hours</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="type">Type</Label>
-                  <Select
-                    value={scheduleForm.type}
-                    onValueChange={(value: EventType) => setScheduleForm((prev) => ({ ...prev, type: value }))}
-                  >
-                    <SelectTrigger id="type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="video">Video Call</SelectItem>
-                      <SelectItem value="call">Phone Call</SelectItem>
-                      <SelectItem value="meeting">In-Person Meeting</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="location">Location (optional)</Label>
-                <Input
-                  id="location"
-                  placeholder="Zoom, Google Meet, or address"
-                  value={scheduleForm.location}
-                  onChange={(event) => setScheduleForm((prev) => ({ ...prev, location: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="notes">Notes (optional)</Label>
-                <Textarea
-                  id="notes"
-                  placeholder="Add any relevant notes..."
-                  value={scheduleForm.notes}
-                  onChange={(event) => setScheduleForm((prev) => ({ ...prev, notes: event.target.value }))}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsScheduleDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleScheduleEvent} disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Scheduling...
-                  </>
-                ) : (
-                  "Schedule"
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Calendar Controls */}
+ 
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -422,10 +337,30 @@ function CalendarContent() {
               <Button variant={view === "month" ? "default" : "outline"} size="sm" onClick={() => setView("month")}>
                 Month
               </Button>
+              <Button variant={view === "fullscreen" ? "default" : "outline"} size="sm" onClick={() => setView("fullscreen")}>
+                Fullscreen
+              </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent>
+          {view === "fullscreen" && (
+            <div className="flex h-[calc(100vh-300px)] min-h-[600px] flex-1 flex-col">
+              {isLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
+                  <h3 className="mt-4 text-lg font-semibold">Loading events</h3>
+                  <p className="text-sm text-muted-foreground">Fetching your schedule...</p>
+                </div>
+              ) : (
+                <FullScreenCalendar 
+                  data={fullscreenCalendarData} 
+                  onNewEvent={() => setIsScheduleDialogOpen(true)}
+                />
+              )}
+            </div>
+          )}
+
           {view === "week" && (
             <div className="space-y-4">
               <div className="grid grid-cols-7 gap-2">

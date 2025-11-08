@@ -1,7 +1,8 @@
 'use client'
 
 import { useChat } from '@ai-sdk/react'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Send, Loader2, Building2, Users, Linkedin, Twitter, Facebook, Globe, Sparkles, Save, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,10 +12,11 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { DataTable } from '@/components/ui/data-table'
 import { DashboardAuthBoundary } from '../DashboardAuthBoundary'
-import { useMutation } from 'convex/react'
+import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { toast } from 'sonner'
 import type { ColumnDef } from '@tanstack/react-table'
+import { Id } from '@/convex/_generated/dataModel'
 
 export default function ChatPage() {
   return (
@@ -25,8 +27,47 @@ export default function ChatPage() {
 }
 
 function ChatContent() {
+  const searchParams = useSearchParams()
+  const sessionId = searchParams.get('sessionId') as Id<"chatHistory"> | null
+  
   const [input, setInput] = useState('')
-  const { messages, sendMessage, status } = useChat()
+  const chatSession = useQuery(
+    api.chat.getChatSession,
+    sessionId ? { sessionId } : "skip"
+  )
+  
+  // Convert stored messages to useChat format
+  const initialMessages = useMemo(() => {
+    if (!chatSession?.messages || chatSession.messages.length === 0) return []
+    
+    return chatSession.messages.map((msg: any) => ({
+      id: msg.id || `msg-${Math.random()}`,
+      role: msg.role,
+      content: msg.content || (msg.parts?.find((p: any) => p.type === 'text')?.text || ''),
+      parts: msg.parts || (msg.content ? [{ type: 'text', text: msg.content }] : []),
+    }))
+  }, [chatSession])
+  
+  const { messages, sendMessage, status, setMessages } = useChat()
+  
+  // Track the last loaded session ID to avoid reloading the same session
+  const lastLoadedSessionId = useRef<string | null>(null)
+  
+  // Load messages when session changes
+  useEffect(() => {
+    if (chatSession && initialMessages.length > 0) {
+      // Only load if this is a different session
+      if (lastLoadedSessionId.current !== chatSession._id) {
+        setMessages(initialMessages)
+        lastLoadedSessionId.current = chatSession._id
+      }
+    } else if (!sessionId && lastLoadedSessionId.current !== null) {
+      // Reset to empty if no session selected
+      setMessages([])
+      lastLoadedSessionId.current = null
+    }
+  }, [chatSession?._id, initialMessages, sessionId, setMessages])
+  
   const saveChatHistory = useMutation(api.chat.saveChatHistory as any)
 
   const scrollRef = useRef<HTMLDivElement>(null)

@@ -3,13 +3,11 @@
 import type React from "react"
 
 import { useMemo, useState } from "react"
-import { Plus, Upload, Mail, Linkedin, Phone, MoreVertical, Loader2 } from "lucide-react"
+import { Plus, Upload, Loader2 } from "lucide-react"
 import { useMutation, useQuery } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import type { Doc, Id } from "@/convex/_generated/dataModel"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
@@ -20,13 +18,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { DashboardAuthBoundary } from "../DashboardAuthBoundary"
+import { ContactCard } from "@/components/contact-card"
+import { EditContactDialog } from "@/components/edit-contact-dialog"
+import { ContactDetailDialog } from "@/components/contact-detail-dialog"
 
 type Stage = Doc<"contacts">["stage"]
 
@@ -82,7 +82,8 @@ function ContactsContent() {
   const createContact = useMutation(api.contacts.create)
   const updateContactStage = useMutation(api.contacts.updateStage)
 
-  const [selectedContactId, setSelectedContactId] = useState<Id<"contacts"> | null>(null)
+  const [editingContactId, setEditingContactId] = useState<Id<"contacts"> | null>(null)
+  const [viewingContactId, setViewingContactId] = useState<Id<"contacts"> | null>(null)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [draggedContact, setDraggedContact] = useState<{ contactId: Id<"contacts">; fromColumn: Column } | null>(null)
@@ -106,13 +107,21 @@ function ContactsContent() {
     return base
   }, [contacts])
 
-  const selectedContact = useMemo(() => {
-    if (!contacts || !selectedContactId) return null
-    return (contacts as ContactWithDetails[]).find((contact) => contact._id === selectedContactId) ?? null
-  }, [contacts, selectedContactId])
+  const editingContact = useMemo(() => {
+    if (!contacts || !editingContactId) return null
+    return (contacts as ContactWithDetails[]).find((contact) => contact._id === editingContactId) ?? null
+  }, [contacts, editingContactId])
 
-  const handleDragStart = (contactId: Id<"contacts">, column: Column) => {
-    setDraggedContact({ contactId, fromColumn: column })
+  const viewingContact = useMemo(() => {
+    if (!contacts || !viewingContactId) return null
+    return (contacts as ContactWithDetails[]).find((contact) => contact._id === viewingContactId) ?? null
+  }, [contacts, viewingContactId])
+
+  const handleDragStart = (contactId: Id<"contacts">) => {
+    const contact = contacts?.find((c) => c._id === contactId)
+    if (contact) {
+      setDraggedContact({ contactId, fromColumn: contact.stage })
+    }
   }
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -397,69 +406,15 @@ function ContactsContent() {
                 </div>
               ) : (
                 contactsByStage[column.id].map((contact) => (
-                <Card
-                  key={contact._id}
-                  draggable
-                  onDragStart={() => handleDragStart(contact._id, column.id)}
-                  className="cursor-move transition-shadow hover:shadow-lg"
-                  onClick={() => setSelectedContactId(contact._id)}
-                >
-                  <CardHeader className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <Avatar>
-                          <AvatarImage src={contact.avatar || "/placeholder.svg?height=40&width=40"} />
-                          <AvatarFallback>
-                            {contact.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-semibold">{contact.name}</p>
-                          <p className="text-sm text-muted-foreground">{contact.role}</p>
-                        </div>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>Edit</DropdownMenuItem>
-                          <DropdownMenuItem>Move to...</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0">
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">{contact.company}</p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Mail className="h-3 w-3" />
-                        {contact.primaryEmail ?? "No email recorded"}
-                      </div>
-                      {contact.linkedinUrl && (
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Linkedin className="h-3 w-3" />
-                          LinkedIn Profile
-                        </div>
-                      )}
-                      {contact.primaryPhone && (
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Phone className="h-3 w-3" />
-                          {contact.primaryPhone}
-                        </div>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        Last contacted: {new Date(contact.lastContacted).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
+                  <ContactCard
+                    key={contact._id}
+                    contact={contact}
+                    draggable
+                    onDragStart={() => handleDragStart(contact._id)}
+                    onClick={(contactId) => setViewingContactId(contactId)}
+                    onEdit={(contactId) => setEditingContactId(contactId)}
+                    onDelete={(contactId) => setEditingContactId(contactId)}
+                  />
                 ))
               )}
             </div>
@@ -468,85 +423,37 @@ function ContactsContent() {
       </div>
 
       {/* Contact Detail Dialog */}
-      <Dialog open={!!selectedContact} onOpenChange={() => setSelectedContactId(null)}>
-        <DialogContent className="max-w-2xl">
-          {selectedContact && (
-            <>
-              <DialogHeader>
-                <div className="flex items-center gap-4">
-                  <Avatar className="h-16 w-16">
-                    <AvatarImage src={selectedContact.avatar || "/placeholder.svg?height=64&width=64"} />
-                    <AvatarFallback className="text-lg">
-                      {selectedContact.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <DialogTitle>{selectedContact.name}</DialogTitle>
-                    <DialogDescription>
-                      {selectedContact.role} at {selectedContact.company}
-                    </DialogDescription>
-                  </div>
-                </div>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label className="text-sm font-medium">Email</Label>
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">
-                      {selectedContact.primaryEmail ?? "No email recorded"}
-                    </span>
-                  </div>
-                </div>
-                {selectedContact.primaryPhone && (
-                  <div className="grid gap-2">
-                    <Label className="text-sm font-medium">Phone</Label>
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{selectedContact.primaryPhone}</span>
-                    </div>
-                  </div>
-                )}
-                {selectedContact.linkedinUrl && (
-                  <div className="grid gap-2">
-                    <Label className="text-sm font-medium">LinkedIn</Label>
-                    <div className="flex items-center gap-2">
-                      <Linkedin className="h-4 w-4 text-muted-foreground" />
-                      <a
-                        href={selectedContact.linkedinUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sm text-primary hover:underline"
-                      >
-                        {selectedContact.linkedinUrl}
-                      </a>
-                    </div>
-                  </div>
-                )}
-                <div className="grid gap-2">
-                  <Label className="text-sm font-medium">Last Contacted</Label>
-                  <span className="text-sm">{new Date(selectedContact.lastContacted).toLocaleDateString()}</span>
-                </div>
-                {selectedContact.notes && (
-                  <div className="grid gap-2">
-                    <Label className="text-sm font-medium">Notes</Label>
-                    <p className="text-sm text-muted-foreground">{selectedContact.notes}</p>
-                  </div>
-                )}
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setSelectedContactId(null)}>
-                  Close
-                </Button>
-                <Button>Edit Contact</Button>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      <ContactDetailDialog
+        contact={viewingContact}
+        open={!!viewingContact}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewingContactId(null)
+          }
+        }}
+        onEdit={(contactId) => {
+          setViewingContactId(null)
+          setEditingContactId(contactId)
+        }}
+        onDelete={(contactId) => {
+          setViewingContactId(null)
+          setEditingContactId(contactId)
+        }}
+      />
+
+      {/* Edit Contact Dialog */}
+      <EditContactDialog
+        contact={editingContact}
+        open={!!editingContact}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingContactId(null)
+          }
+        }}
+        onSuccess={() => {
+          setEditingContactId(null)
+        }}
+      />
     </div>
   )
 }

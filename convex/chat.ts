@@ -126,3 +126,39 @@ export const getChatHistory = query({
   },
 });
 
+// Query: List all chat sessions for the user
+export const listChatSessions = query({
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    const chatSessions = await ctx.db
+      .query("chatHistory")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .collect();
+
+    return chatSessions;
+  },
+});
+
+// Query: Get a single chat session by ID
+export const getChatSession = query({
+  args: { sessionId: v.id("chatHistory") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.userId !== userId) {
+      return null;
+    }
+
+    return session;
+  },
+});
+

@@ -3,8 +3,11 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "convex/react"
 import { api } from "@/convex/_generated/api"
-import type { Doc } from "@/convex/_generated/dataModel"
+import type { Doc, Id } from "@/convex/_generated/dataModel"
 import { Search, Plus, Loader2, Sparkles, Mail, Linkedin, MapPin, Edit, Wand2 } from "lucide-react"
+import { ContactCard } from "@/components/contact-card"
+import { EditContactDialog } from "@/components/edit-contact-dialog"
+import { ContactDetailDialog } from "@/components/contact-detail-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -55,7 +58,9 @@ function OutreachContent() {
   const [isSearching, setIsSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
   const [searchResults, setSearchResults] = useState<ContactDoc[]>([])
-  const [editingContact, setEditingContact] = useState<ContactDoc | null>(null)
+  const [editingContactId, setEditingContactId] = useState<Id<"contacts"> | null>(null)
+  const [viewingContactId, setViewingContactId] = useState<Id<"contacts"> | null>(null)
+  const [generatingEmailContactId, setGeneratingEmailContactId] = useState<Id<"contacts"> | null>(null)
   const [isGeneratingEmail, setIsGeneratingEmail] = useState(false)
   const [generatedEmail, setGeneratedEmail] = useState<{ subject: string; message: string } | null>(null)
   const [emailPurpose, setEmailPurpose] = useState("")
@@ -63,6 +68,21 @@ function OutreachContent() {
   const [editingMessageId, setEditingMessageId] = useState<Doc<"outreachMessages">["_id"] | null>(null)
   const [editingMessageText, setEditingMessageText] = useState("")
   const [editingMessageTone, setEditingMessageTone] = useState<"professional" | "casual" | "friendly">("professional")
+
+  const editingContact = useMemo(() => {
+    if (!contacts || !editingContactId) return null
+    return contacts.find((c) => c._id === editingContactId) ?? null
+  }, [contacts, editingContactId])
+
+  const generatingEmailContact = useMemo(() => {
+    if (!contacts || !generatingEmailContactId) return null
+    return contacts.find((c) => c._id === generatingEmailContactId) ?? null
+  }, [contacts, generatingEmailContactId])
+
+  const viewingContact = useMemo(() => {
+    if (!contacts || !viewingContactId) return null
+    return contacts.find((c) => c._id === viewingContactId) ?? null
+  }, [contacts, viewingContactId])
 
   const handleSearch = async () => {
     const trimmedQuery = searchQuery.trim()
@@ -155,9 +175,7 @@ function OutreachContent() {
     return parts.join(", ") || "Unknown"
   }
 
-  const handleGenerateEmail = async () => {
-    if (!editingContact) return
-
+  const handleGenerateEmail = async (contact: ContactDoc) => {
     if (!emailPurpose.trim()) {
       toast.error("Please enter a purpose for the email", {
         description: "The email purpose is required to generate a personalized message.",
@@ -176,13 +194,13 @@ function OutreachContent() {
         },
         body: JSON.stringify({
           contact: {
-            name: editingContact.name,
-            firstName: editingContact.firstName,
-            company: editingContact.company,
-            role: editingContact.role,
-            headline: editingContact.headline,
-            linkedinUrl: editingContact.linkedinUrl,
-            location: editingContact.location,
+            name: contact.name,
+            firstName: contact.firstName,
+            company: contact.company,
+            role: contact.role,
+            headline: contact.headline,
+            linkedinUrl: contact.linkedinUrl,
+            location: contact.location,
           },
           tone: emailTone,
           purpose: emailPurpose,
@@ -202,27 +220,21 @@ function OutreachContent() {
       setGeneratedEmail(emailData)
       
       // Auto-save the generated email
-      if (editingContact) {
-        try {
-          await createMessage({
-            contactId: editingContact._id,
-            contactName: editingContact.name,
-            company: editingContact.company,
-            message: `Subject: ${emailData.subject}\n\n${emailData.message}`,
-            tone: emailTone,
-          })
-          toast.success("Email generated and saved!", {
-            description: "Your personalized outreach email has been saved to Outreach Messages.",
-          })
-        } catch (saveError) {
-          console.error("Error auto-saving email:", saveError)
-          toast.success("Email generated successfully!", {
-            description: "Your personalized outreach email is ready. You can save it manually.",
-          })
-        }
-      } else {
+      try {
+        await createMessage({
+          contactId: contact._id,
+          contactName: contact.name,
+          company: contact.company,
+          message: `Subject: ${emailData.subject}\n\n${emailData.message}`,
+          tone: emailTone,
+        })
+        toast.success("Email generated and saved!", {
+          description: "Your personalized outreach email has been saved to Outreach Messages.",
+        })
+      } catch (saveError) {
+        console.error("Error auto-saving email:", saveError)
         toast.success("Email generated successfully!", {
-          description: "Your personalized outreach email is ready.",
+          description: "Your personalized outreach email is ready. You can save it manually.",
         })
       }
     } catch (error) {
@@ -235,30 +247,6 @@ function OutreachContent() {
     }
   }
 
-  const handleSaveEmail = async () => {
-    if (!editingContact || !generatedEmail) return
-
-    try {
-      await createMessage({
-        contactId: editingContact._id,
-        contactName: editingContact.name,
-        company: editingContact.company,
-        message: `Subject: ${generatedEmail.subject}\n\n${generatedEmail.message}`,
-        tone: emailTone,
-      })
-      toast.success("Email saved to outreach messages", {
-        description: "The email has been added to your outreach drafts.",
-      })
-      setEditingContact(null)
-      setGeneratedEmail(null)
-      setEmailPurpose("")
-    } catch (error) {
-      console.error("Error saving email:", error)
-      toast.error("Failed to save email", {
-        description: "Please try again.",
-      })
-    }
-  }
 
   const handleCopyEmail = () => {
     if (!generatedEmail) return
@@ -276,7 +264,10 @@ function OutreachContent() {
       cell: ({ row }) => {
         const contact = row.original
         return (
-          <div className="flex items-center gap-3">
+          <div 
+            className="flex items-center gap-3 cursor-pointer hover:opacity-80"
+            onClick={() => setViewingContactId(contact._id)}
+          >
             <Avatar className="h-8 w-8">
               <AvatarImage src={contact.avatar || "/placeholder.svg?height=32&width=32"} />
               <AvatarFallback>
@@ -320,13 +311,32 @@ function OutreachContent() {
             variant="outline"
             size="sm"
             onClick={() => {
-              setEditingContact(contact)
-              setGeneratedEmail(null)
-              setEmailPurpose("")
+              setEditingContactId(contact._id)
             }}
           >
             <Edit className="mr-2 h-4 w-4" />
             Edit
+          </Button>
+        )
+      },
+    },
+    {
+      id: "generate-email",
+      header: "Generate Email",
+      cell: ({ row }) => {
+        const contact = row.original
+        return (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setGeneratingEmailContactId(contact._id)
+              setGeneratedEmail(null)
+              setEmailPurpose("")
+            }}
+          >
+            <Wand2 className="mr-2 h-4 w-4" />
+            Generate Email
           </Button>
         )
       },
@@ -581,12 +591,45 @@ function OutreachContent() {
         </CardContent>
       </Card>
 
-      {/* Generate Outreach Email Dialog */}
-      <Dialog
+      {/* Contact Detail Dialog */}
+      <ContactDetailDialog
+        contact={viewingContact}
+        open={!!viewingContact}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewingContactId(null)
+          }
+        }}
+        onEdit={(contactId) => {
+          setViewingContactId(null)
+          setEditingContactId(contactId)
+        }}
+        onDelete={(contactId) => {
+          setViewingContactId(null)
+          setEditingContactId(contactId)
+        }}
+      />
+
+      {/* Edit Contact Dialog */}
+      <EditContactDialog
+        contact={editingContact}
         open={!!editingContact}
         onOpenChange={(open) => {
           if (!open) {
-            setEditingContact(null)
+            setEditingContactId(null)
+          }
+        }}
+        onSuccess={() => {
+          setEditingContactId(null)
+        }}
+      />
+
+      {/* Generate Email Dialog */}
+      <Dialog
+        open={!!generatingEmailContact}
+        onOpenChange={(open) => {
+          if (!open) {
+            setGeneratingEmailContactId(null)
             setGeneratedEmail(null)
             setEmailPurpose("")
           }
@@ -596,11 +639,11 @@ function OutreachContent() {
           <DialogHeader>
             <DialogTitle>Generate Outreach Email</DialogTitle>
             <DialogDescription>
-              {editingContact && `Create a personalized email for ${editingContact.name} at ${editingContact.company}`}
+              {generatingEmailContact && `Create a personalized email for ${generatingEmailContact.name} at ${generatingEmailContact.company}`}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {editingContact && (
+            {generatingEmailContact && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Contact Information</CardTitle>
@@ -608,20 +651,20 @@ function OutreachContent() {
                 <CardContent className="space-y-2">
                   <div>
                     <Label className="text-xs text-muted-foreground">Name</Label>
-                    <p className="text-sm font-medium">{editingContact.name}</p>
+                    <p className="text-sm font-medium">{generatingEmailContact.name}</p>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Company</Label>
-                    <p className="text-sm font-medium">{editingContact.company}</p>
+                    <p className="text-sm font-medium">{generatingEmailContact.company}</p>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Role</Label>
-                    <p className="text-sm font-medium">{editingContact.role}</p>
+                    <p className="text-sm font-medium">{generatingEmailContact.role}</p>
                   </div>
-                  {editingContact.primaryEmail && (
+                  {generatingEmailContact.primaryEmail && (
                     <div>
                       <Label className="text-xs text-muted-foreground">Email</Label>
-                      <p className="text-sm font-medium">{editingContact.primaryEmail}</p>
+                      <p className="text-sm font-medium">{generatingEmailContact.primaryEmail}</p>
                     </div>
                   )}
                 </CardContent>
@@ -655,8 +698,8 @@ function OutreachContent() {
               </div>
 
               <Button
-                onClick={handleGenerateEmail}
-                disabled={isGeneratingEmail || !emailPurpose.trim()}
+                onClick={() => generatingEmailContact && handleGenerateEmail(generatingEmailContact)}
+                disabled={isGeneratingEmail || !emailPurpose.trim() || !generatingEmailContact}
                 className="w-full"
               >
                 {isGeneratingEmail ? (
@@ -702,4 +745,5 @@ function OutreachContent() {
     </div>
   )
 }
+
 
