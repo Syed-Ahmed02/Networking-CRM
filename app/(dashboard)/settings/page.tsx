@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import { useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery } from "convex/react"
@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
+import { DashboardAuthBoundary } from "../DashboardAuthBoundary"
 
 type UserDoc = Doc<"users">
 type IntegrationDoc = Doc<"integrations">
@@ -30,6 +31,14 @@ const emptyProfile = {
 }
 
 export default function SettingsPage() {
+  return (
+    <DashboardAuthBoundary>
+      <SettingsContent />
+    </DashboardAuthBoundary>
+  )
+}
+
+function SettingsContent() {
   const user = useQuery(api.users.getCurrent, {}) as UserDoc | null | undefined
   const integrations = useQuery(api.integrations.list, {}) as IntegrationDoc[] | undefined
   const importHistory = useQuery(api.importHistory.list, {}) as ImportHistoryDoc[] | undefined

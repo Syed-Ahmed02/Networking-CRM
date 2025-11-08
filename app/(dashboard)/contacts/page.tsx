@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import type React from "react"
 
@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
+import { DashboardAuthBoundary } from "../DashboardAuthBoundary"
 
 type Stage = Doc<"contacts">["stage"]
 
@@ -68,6 +69,14 @@ const columns: { id: Column; title: string; color: string }[] = [
 ]
 
 export default function ContactsPage() {
+  return (
+    <DashboardAuthBoundary>
+      <ContactsContent />
+    </DashboardAuthBoundary>
+  )
+}
+
+function ContactsContent() {
   const contacts = useQuery(api.contacts.list, { stage: undefined })
 
   const createContact = useMutation(api.contacts.create)

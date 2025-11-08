@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import { useCallback, useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight, Plus, CalendarIcon, Clock, Video, MapPin, Loader2 } from "lucide-react"
@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { DashboardAuthBoundary } from "../DashboardAuthBoundary"
 
 type ContactDoc = Doc<"contacts"> & {
   primaryEmail?: string | null
@@ -83,6 +84,14 @@ const createInitialScheduleForm = (defaultDate: Date): ScheduleFormState => ({
 })
 
 export default function CalendarPage() {
+  return (
+    <DashboardAuthBoundary>
+      <CalendarContent />
+    </DashboardAuthBoundary>
+  )
+}
+
+function CalendarContent() {
   const contacts = useQuery(api.contacts.list, { stage: undefined }) as ContactDoc[] | undefined
   const events = useQuery(api.calendarEvents.list, { date: undefined, contactId: undefined })
   const createEvent = useMutation(api.calendarEvents.create)

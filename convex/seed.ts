@@ -1,7 +1,7 @@
 import { internalMutation } from "./_generated/server"
 import type { Id } from "./_generated/dataModel"
 
-const DEFAULT_CLERK_USER_ID = "kn72yht4m293r5ttra96p8j9497tzknp"
+const DEFAULT_CLERK_USER_ID = "user_34vF6uAoNX8n0msZ7UuL82xg1SX"
 
 type ContactSeed = {
   name: string
@@ -116,25 +116,9 @@ export const init = internalMutation({
       .first()
 
     if (!userDoc) {
-      const userId = await ctx.db.insert("users", {
-        clerkUserId: DEFAULT_CLERK_USER_ID,
-        firstName: "Alex",
-        lastName: "Morgan",
-        email: "alex.morgan@example.com",
-        role: "Head of Partnerships",
-        company: "NetworkCRM",
-        location: "San Francisco, CA",
-        phone: "+1 (555) 000-1111",
-        linkedin: "https://linkedin.com/in/alexmorgan",
-        avatar: undefined,
-        createdAt: now,
-        updatedAt: now,
-      })
-      userDoc = await ctx.db.get(userId)
-    }
-
-    if (!userDoc) {
-      throw new Error("Failed to ensure default user for seeding")
+      throw new Error(
+        "Default seed user not found. Ensure the provided Clerk user exists before running the seed."
+      )
     }
 
     const userId = userDoc._id

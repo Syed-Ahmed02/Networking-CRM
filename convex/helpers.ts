@@ -15,3 +15,11 @@ export async function getAuthUserId(
   return user?._id ?? null;
 }
 
+export async function requireIdentity(ctx: QueryCtx | MutationCtx) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error("Not authenticated");
+  }
+  return identity;
+}
+

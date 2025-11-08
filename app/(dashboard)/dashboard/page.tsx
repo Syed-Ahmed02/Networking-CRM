@@ -1,100 +1,137 @@
-import { fetchQuery } from "convex/nextjs"
+'use client'
+
+import { useMemo } from "react"
+import { useQuery } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import type { Doc } from "@/convex/_generated/dataModel"
-import { auth } from "@clerk/nextjs/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Bell, TrendingUp, Users, Calendar } from "lucide-react"
+import { Bell, TrendingUp, Users, Calendar, Loader2 } from "lucide-react"
+import { DashboardAuthBoundary } from "../DashboardAuthBoundary"
 
 type ContactWithDetails = Doc<"contacts"> & {
   primaryEmail?: string | null
   primaryPhone?: string | null
 }
 
-export default async function DashboardPage() {
-  const authState = await auth()
-  const token = await authState.getToken({ template: "convex" })
-  const fetchOptions = token ? { token } : undefined
+export default function DashboardPage() {
+  return (
+    <DashboardAuthBoundary>
+      <DashboardContent />
+    </DashboardAuthBoundary>
+  )
+}
 
-  const [contacts, followUps, recentActivity, events, outreachMessages] = await Promise.all([
-    fetchQuery(api.contacts.list, { stage: undefined }, fetchOptions),
-    fetchQuery(api.followUpRecommendations.getActive, {}, fetchOptions),
-    fetchQuery(api.activityLog.getRecent, { limit: 6 }, fetchOptions),
-    fetchQuery(api.calendarEvents.list, { date: undefined, contactId: undefined }, fetchOptions),
-    fetchQuery(api.outreach.listMessages, { sent: undefined, contactId: undefined }, fetchOptions),
-  ])
+function DashboardContent() {
+  const contacts = useQuery(api.contacts.list, { stage: undefined }) as ContactWithDetails[] | undefined
+  const followUps = useQuery(api.followUpRecommendations.getActive, {}) ?? undefined
+  const recentActivity = useQuery(api.activityLog.getRecent, { limit: 6 }) ?? undefined
+  const events = useQuery(api.calendarEvents.list, { date: undefined, contactId: undefined }) ?? undefined
+  const outreachMessages = useQuery(api.outreach.listMessages, { sent: undefined, contactId: undefined }) ?? undefined
 
-  const contactMap = new Map<string, ContactWithDetails>()
-  for (const contact of contacts as ContactWithDetails[]) {
-    contactMap.set(contact._id, contact)
+  const isLoading =
+    contacts === undefined ||
+    followUps === undefined ||
+    recentActivity === undefined ||
+    events === undefined ||
+    outreachMessages === undefined
+
+  const { stats, followUpItems, activityItems } = useMemo(() => {
+    const contactsList = contacts ?? []
+    const followUpList = followUps ?? []
+    const activityList = recentActivity ?? []
+    const eventsList = events ?? []
+    const outreachList = outreachMessages ?? []
+
+    const contactMap = new Map<string, ContactWithDetails>()
+    for (const contact of contactsList) {
+      contactMap.set(contact._id, contact)
+    }
+
+    const now = new Date()
+    const startOfWeek = (() => {
+      const date = new Date(now)
+      const day = date.getDay()
+      const diff = date.getDate() - day + (day === 0 ? -6 : 1)
+      date.setDate(diff)
+      date.setHours(0, 0, 0, 0)
+      return date
+    })()
+    const endOfWeek = (() => {
+      const date = new Date(startOfWeek)
+      date.setDate(date.getDate() + 6)
+      date.setHours(23, 59, 59, 999)
+      return date
+    })()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime()
+
+    const totalContacts = contactsList.length
+    const newContactsThisMonth = contactsList.filter((contact) => contact.createdAt >= startOfMonth).length
+    const meetingsThisWeek = eventsList.filter((event) => {
+      const eventDate = new Date(`${event.date}T00:00:00`)
+      return eventDate >= startOfWeek && eventDate <= endOfWeek
+    }).length
+    const upcomingMeetings = eventsList.filter((event) => new Date(`${event.date}T${event.time}`) >= now).length
+    const totalMessages = outreachList.length
+    const sentMessages = outreachList.filter((message) => message.sent).length
+    const responseRate = totalMessages > 0 ? Math.round((sentMessages / totalMessages) * 100) : 0
+    const pendingFollowUps = followUpList.length
+
+    const statsData = [
+      {
+        title: "Total Contacts",
+        value: totalContacts.toString(),
+        change: `${newContactsThisMonth} new this month`,
+        icon: Users,
+      },
+      {
+        title: "Meetings This Week",
+        value: meetingsThisWeek.toString(),
+        change: `${upcomingMeetings} upcoming`,
+        icon: Calendar,
+      },
+      {
+        title: "Response Rate",
+        value: `${responseRate}%`,
+        change: `${sentMessages}/${totalMessages} messages sent`,
+        icon: TrendingUp,
+      },
+      {
+        title: "Pending Follow-ups",
+        value: pendingFollowUps.toString(),
+        change: "Active recommendations",
+        icon: Bell,
+      },
+    ]
+
+    const followUpItemsData = followUpList.map((rec) => ({
+      ...rec,
+      contact: rec.contactId ? contactMap.get(rec.contactId) : undefined,
+    }))
+
+    const activityItemsData = activityList.map((activity) => {
+      const contact = activity.contactId ? contactMap.get(activity.contactId) : undefined
+      return { activity, contact }
+    })
+
+    return {
+      stats: statsData,
+      followUpItems: followUpItemsData,
+      activityItems: activityItemsData,
+    }
+  }, [contacts, followUps, recentActivity, events, outreachMessages])
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[300px] w-full items-center justify-center">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>Loading dashboard...</span>
+        </div>
+      </div>
+    )
   }
-
-  const now = new Date()
-  const startOfWeek = (() => {
-    const date = new Date(now)
-    const day = date.getDay()
-    const diff = date.getDate() - day + (day === 0 ? -6 : 1)
-    date.setDate(diff)
-    date.setHours(0, 0, 0, 0)
-    return date
-  })()
-  const endOfWeek = (() => {
-    const date = new Date(startOfWeek)
-    date.setDate(date.getDate() + 6)
-    date.setHours(23, 59, 59, 999)
-    return date
-  })()
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime()
-
-  const totalContacts = contacts.length
-  const newContactsThisMonth = contacts.filter((contact) => contact.createdAt >= startOfMonth).length
-  const meetingsThisWeek = events.filter((event) => {
-    const eventDate = new Date(`${event.date}T00:00:00`)
-    return eventDate >= startOfWeek && eventDate <= endOfWeek
-  }).length
-  const upcomingMeetings = events.filter((event) => new Date(`${event.date}T${event.time}`) >= now).length
-  const totalMessages = outreachMessages.length
-  const sentMessages = outreachMessages.filter((message) => message.sent).length
-  const responseRate = totalMessages > 0 ? Math.round((sentMessages / totalMessages) * 100) : 0
-  const pendingFollowUps = followUps.length
-
-  const stats = [
-    {
-      title: "Total Contacts",
-      value: totalContacts.toString(),
-      change: `${newContactsThisMonth} new this month`,
-      icon: Users,
-    },
-    {
-      title: "Meetings This Week",
-      value: meetingsThisWeek.toString(),
-      change: `${upcomingMeetings} upcoming`,
-      icon: Calendar,
-    },
-    {
-      title: "Response Rate",
-      value: `${responseRate}%`,
-      change: `${sentMessages}/${totalMessages} messages sent`,
-      icon: TrendingUp,
-    },
-    {
-      title: "Pending Follow-ups",
-      value: pendingFollowUps.toString(),
-      change: "Active recommendations",
-      icon: Bell,
-    },
-  ]
-
-  const followUpItems = followUps.map((rec) => ({
-    ...rec,
-    contact: rec.contactId ? contactMap.get(rec.contactId) : undefined,
-  }))
-
-  const activityItems = recentActivity.map((activity) => {
-    const contact = activity.contactId ? contactMap.get(activity.contactId) : undefined
-    return { activity, contact }
-  })
 
   return (
     <div className="space-y-6">

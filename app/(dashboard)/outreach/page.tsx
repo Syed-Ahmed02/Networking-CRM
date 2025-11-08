@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "convex/react"
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
+import { DashboardAuthBoundary } from "../DashboardAuthBoundary"
 
 type ContactDoc = Doc<"contacts"> & {
   primaryEmail?: string | null
@@ -22,6 +23,14 @@ type ContactDoc = Doc<"contacts"> & {
 type OutreachMessageDoc = Doc<"outreachMessages">
 
 export default function OutreachPage() {
+  return (
+    <DashboardAuthBoundary>
+      <OutreachContent />
+    </DashboardAuthBoundary>
+  )
+}
+
+function OutreachContent() {
   const contacts = useQuery(api.contacts.list, { stage: undefined }) as ContactDoc[] | undefined
   const outreachMessages = useQuery(api.outreach.listMessages, { sent: undefined, contactId: undefined })
   const outreachSearches = useQuery(api.outreach.listSearches, {})
