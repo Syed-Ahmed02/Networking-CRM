@@ -2,7 +2,8 @@
 
 import Link from "next/link"
 import { usePathname, useSearchParams } from "next/navigation"
-import { LayoutDashboard, Users, Send, Calendar, Settings, MessageSquare } from "lucide-react"
+import { Suspense } from "react"
+import { LayoutDashboard, Users, Send, Calendar, Settings, MessageSquare, Loader2 } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -46,7 +47,8 @@ const navigationItems = [
 ]
 
 // Component to render chat sessions list (only when authenticated)
-function ChatSessionsList() {
+// This component uses useSearchParams, so it needs to be wrapped in Suspense
+function ChatSessionsListContent() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   // useQuery returns undefined while loading, and will only be called when authenticated
@@ -112,14 +114,30 @@ function ChatSessionsList() {
   )
 }
 
-export function AppSidebar() {
+// Wrapper with Suspense for ChatSessionsList
+function ChatSessionsList() {
+  return (
+    <Suspense fallback={
+      <SidebarMenuItem>
+        <div className="px-2 py-1 text-sm text-muted-foreground">
+          Loading sessions...
+        </div>
+      </SidebarMenuItem>
+    }>
+      <ChatSessionsListContent />
+    </Suspense>
+  )
+}
+
+// Component that uses useSearchParams - needs to be wrapped in Suspense
+function AppSidebarContent() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
   return (
     <Sidebar>
       <SidebarHeader className="flex h-16 items-center border-b px-6 justify-center text-2xl font-bold">
-        NetworkCRM
+        CoffeeAgent.AI
       </SidebarHeader>
       <SidebarContent className="flex flex-col overflow-y-auto overflow-x-hidden">
         {/* Navigation Section */}
@@ -201,5 +219,27 @@ export function AppSidebar() {
         </SidebarFooter>
       </SidebarContent>
     </Sidebar>
+  )
+}
+
+// Export wrapper with Suspense boundary - required by Next.js 16
+export function AppSidebar() {
+  return (
+    <Suspense fallback={
+      <Sidebar>
+        <SidebarHeader className="flex h-16 items-center border-b px-6 justify-center text-2xl font-bold">
+          CoffeeAgent.AI
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarMenuItem>
+            <div className="flex items-center justify-center p-4">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          </SidebarMenuItem>
+        </SidebarContent>
+      </Sidebar>
+    }>
+      <AppSidebarContent />
+    </Suspense>
   )
 }

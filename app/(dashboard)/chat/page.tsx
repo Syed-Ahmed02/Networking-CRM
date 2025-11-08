@@ -1,7 +1,7 @@
 'use client'
 
 import { useChat } from '@ai-sdk/react'
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Send, Loader2, Building2, Users, Linkedin, Twitter, Facebook, Globe, Sparkles, Save, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -21,7 +21,14 @@ import { Id } from '@/convex/_generated/dataModel'
 export default function ChatPage() {
   return (
     <DashboardAuthBoundary>
-      <ChatContent />
+      <Suspense fallback={
+        <div className="flex h-[calc(100vh-8rem)] flex-col items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <p className="mt-4 text-sm text-muted-foreground">Loading chat...</p>
+        </div>
+      }>
+        <ChatContent />
+      </Suspense>
     </DashboardAuthBoundary>
   )
 }

@@ -9,8 +9,8 @@ import { ClerkProvider } from "@clerk/nextjs"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "NetworkCRM - Agentic Networking Platform",
-  description: "AI-powered CRM for professional networking",
+  title: "CoffeeAgent.AI - Your AI Networking Assistant",
+  description: "AI-powered networking platform to research companies, find people, and build meaningful professional connections",
 }
 
 export default function RootLayout({
