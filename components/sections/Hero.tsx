@@ -42,7 +42,7 @@ export function Hero() {
 
           <BlurFade delay={0.4}>
             <div className="flex flex-col sm:flex-row items-center gap-4">
-              <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
+              <SignUpButton mode="modal" >
                 <Button size="lg" className="group">
                   Get Started Free
                   <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
@@ -60,15 +60,15 @@ export function Hero() {
                 <HeroVideoDialog
                   className="dark:hidden block"
                   animationStyle="from-center"
-                  videoSrc="https://www.youtube.com/embed/qh3NGpYRG3I?si=4rb-zSdDkVK9qxxb"
-                  thumbnailSrc="https://startup-template-sage.vercel.app/hero-light.png"
+                  videoSrc="https://www.youtube.com/embed/5kqX8YTqMr4?si=0cZcFvnFxgRCLa43"
+                  thumbnailSrc="/homepage.png"
                   thumbnailAlt="CoffeeAgent.AI Demo Video"
                 />
                 <HeroVideoDialog
                   className="hidden dark:block"
                   animationStyle="from-center"
-                  videoSrc="https://www.youtube.com/embed/qh3NGpYRG3I?si=4rb-zSdDkVK9qxxb"
-                  thumbnailSrc="https://startup-template-sage.vercel.app/hero-dark.png"
+                  videoSrc="https://www.youtube.com/embed/5kqX8YTqMr4?si=0cZcFvnFxgRCLa43"
+                  thumbnailSrc="/homepage.png"
                   thumbnailAlt="CoffeeAgent.AI Demo Video"
                 />
               </div>
