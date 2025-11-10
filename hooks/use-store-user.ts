@@ -26,18 +26,29 @@ export function useStoreUserEffect() {
     let cancelled = false;
 
     async function run() {
-      const id = await storeUser();
-      if (!cancelled) {
-        setUserId(id);
+      try {
+        const id = await storeUser();
+        if (!cancelled) {
+          setUserId(id);
+        }
+      } catch (error) {
+        // Enhanced error logging for debugging
+        console.error("Failed to store user in Convex:", error);
+        if (error instanceof Error) {
+          if (error.message.includes("Not authenticated") || error.message.includes("authentication")) {
+            console.error(
+              "⚠️ Authentication error: Make sure CLERK_JWT_ISSUER_DOMAIN is set in Convex Dashboard",
+              "\nCheck: https://dashboard.convex.dev → Settings → Environment Variables"
+            );
+          }
+        }
+        if (!cancelled) {
+          setUserId(null);
+        }
       }
     }
 
-    run().catch((error) => {
-      console.error("Failed to store user", error);
-      if (!cancelled) {
-        setUserId(null);
-      }
-    });
+    run();
 
     return () => {
       cancelled = true;
