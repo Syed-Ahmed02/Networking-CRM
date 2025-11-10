@@ -29,7 +29,7 @@ export function CTA() {
                 with the power of AI at your side.
               </p>
               
-              <SignUpButton mode="modal">
+              <SignUpButton mode="modal" >
                 <Button size="lg" className="group">
                   Get Started Free
                   <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />

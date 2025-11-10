@@ -42,14 +42,14 @@ export function Hero() {
 
           <BlurFade delay={0.4}>
             <div className="flex flex-col sm:flex-row items-center gap-4">
-              <SignUpButton mode="modal">
+              <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
                 <Button size="lg" className="group">
                   Get Started Free
                   <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </Button>
               </SignUpButton>
               <Button size="lg" variant="outline" asChild>
-                <Link href="/dashboard">View Demo</Link>
+                <Link href="/#features">Learn More</Link>
               </Button>
             </div>
           </BlurFade>

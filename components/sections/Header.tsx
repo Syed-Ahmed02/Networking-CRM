@@ -32,10 +32,10 @@ export function Header() {
             </Button>
           ) : (
             <>
-              <SignInButton mode="modal">
+              <SignInButton mode="modal" >
                 <Button variant="ghost">Sign In</Button>
               </SignInButton>
-              <SignUpButton mode="modal">
+              <SignUpButton mode="modal" >
                 <Button>Get Started</Button>
               </SignUpButton>
             </>
