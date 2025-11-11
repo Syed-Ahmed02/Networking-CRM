@@ -345,14 +345,13 @@ function OutreachContent() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Outreach</h1>
-        <p className="text-muted-foreground">Find and connect with potential contacts</p>
+      <div className="space-y-1">
+        <h1 className="text-3xl font-bold leading-tight">Outreach</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">Find and connect with potential contacts</p>
       </div>
 
       {/* Search Section */}
-      <Card>
+      <Card className="border-border/70">
         <CardHeader>
           <CardTitle>Search Contacts</CardTitle>
           <CardDescription>
@@ -360,7 +359,7 @@ function OutreachContent() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -371,7 +370,11 @@ function OutreachContent() {
                 className="pl-9"
               />
             </div>
-            <Button onClick={handleSearch} disabled={isSearching || isContactsLoading}>
+            <Button
+              onClick={handleSearch}
+              disabled={isSearching || isContactsLoading}
+              className="w-full sm:w-auto"
+            >
               {isSearching ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -410,7 +413,7 @@ function OutreachContent() {
 
       {/* Search Results */}
       {hasResults && !isSearching && (
-        <Card>
+        <Card className="border-border/70">
           <CardHeader>
             <CardTitle>Search Results</CardTitle>
             <CardDescription>
@@ -435,7 +438,7 @@ function OutreachContent() {
       )}
 
       {/* AI Suggestions */}
-      <Card>
+      <Card className="border-border/70">
         <CardHeader>
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
@@ -467,14 +470,14 @@ function OutreachContent() {
               {suggestions.map((suggestion) => {
                 const isEditing = editingMessageId === suggestion._id
                 return (
-                  <Card key={suggestion._id}>
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle className="text-base">{suggestion.contactName}</CardTitle>
+                  <Card key={suggestion._id} className="border border-border/60 shadow-sm">
+                    <CardHeader className="gap-3 pb-3">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="space-y-1">
+                          <CardTitle className="text-base leading-tight">{suggestion.contactName}</CardTitle>
                           <CardDescription>{suggestion.company}</CardDescription>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           {!isEditing && (
                             <>
                               <Badge variant="outline" className="capitalize">

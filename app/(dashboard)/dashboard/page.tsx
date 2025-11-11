@@ -135,20 +135,22 @@ function DashboardContent() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back! Here&apos;s your networking overview.</p>
+      <div className="space-y-1">
+        <h1 className="text-3xl font-bold leading-tight">Dashboard</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
+          Welcome back! Here&apos;s your networking overview.
+        </p>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => {
           const Icon = stat.icon
           return (
-            <Card key={stat.title}>
+            <Card key={stat.title} className="border-border/70">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-                <Icon className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium text-balance">{stat.title}</CardTitle>
+                <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
@@ -163,7 +165,7 @@ function DashboardContent() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Follow-up Recommendations */}
-        <Card>
+        <Card className="border-border/70">
           <CardHeader>
             <CardTitle>Follow-up Recommendations</CardTitle>
             <CardDescription>AI-powered suggestions for your next actions</CardDescription>
@@ -176,8 +178,11 @@ function DashboardContent() {
             ) : (
               <div className="space-y-4">
                 {followUpItems.map((rec) => (
-                  <div key={rec._id} className="flex items-start gap-4 rounded-lg border p-4">
-                    <Avatar>
+                  <div
+                    key={rec._id}
+                    className="flex flex-col gap-4 rounded-lg border border-border/60 p-4 sm:flex-row sm:items-start"
+                  >
+                    <Avatar className="shrink-0">
                       <AvatarImage src={rec.contact?.avatar || "/placeholder.svg?height=40&width=40"} />
                       <AvatarFallback>
                         {(rec.contact?.name || rec.contactId)
@@ -187,9 +192,9 @@ function DashboardContent() {
                           .join("")}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium">{rec.contact?.name ?? "Unknown contact"}</p>
+                    <div className="flex-1 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium leading-tight">{rec.contact?.name ?? "Unknown contact"}</p>
                         <Badge
                           variant={
                             rec.priority === "high"
@@ -198,13 +203,14 @@ function DashboardContent() {
                                 ? "default"
                                 : "secondary"
                           }
+                          className="capitalize"
                         >
                           {rec.priority}
                         </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">{rec.contact?.company ?? "No company recorded"}</p>
-                      <p className="text-sm">{rec.action}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm leading-relaxed text-balance">{rec.action}</p>
+                      <p className="text-xs font-medium text-muted-foreground">
                         Last contact: {rec.daysSinceLastContact} days ago
                       </p>
                     </div>
@@ -216,7 +222,7 @@ function DashboardContent() {
         </Card>
 
         {/* Recent Activity */}
-        <Card>
+        <Card className="border-border/70">
           <CardHeader>
             <CardTitle>Recent Activity</CardTitle>
             <CardDescription>Your latest interactions and updates</CardDescription>
@@ -229,8 +235,11 @@ function DashboardContent() {
             ) : (
               <div className="space-y-4">
                 {activityItems.map(({ activity, contact }) => (
-                  <div key={activity._id} className="flex items-center gap-4">
-                    <Avatar>
+                  <div
+                    key={activity._id}
+                    className="flex flex-col gap-3 rounded-lg border border-border/60 p-4 sm:flex-row sm:items-center"
+                  >
+                    <Avatar className="shrink-0">
                       <AvatarImage src={contact?.avatar || "/placeholder.svg"} />
                       <AvatarFallback>
                         {(contact?.name ?? "NA")
@@ -240,12 +249,12 @@ function DashboardContent() {
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 space-y-1">
-                      <p className="font-medium">{contact?.name ?? "General activity"}</p>
+                      <p className="font-medium leading-tight">{contact?.name ?? "General activity"}</p>
                       <p className="text-sm text-muted-foreground">{contact?.company ?? "No associated contact"}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">{activity.description}</p>
-                      <p className="text-xs text-muted-foreground">
+                    <div className="flex flex-col gap-1 text-sm text-muted-foreground sm:text-right">
+                      <p className="font-medium text-foreground">{activity.description}</p>
+                      <p className="text-xs">
                         {new Date(activity.createdAt).toLocaleString()}
                       </p>
                     </div>

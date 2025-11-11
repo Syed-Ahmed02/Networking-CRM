@@ -39,12 +39,14 @@ const features = [
 
 export function Features() {
   return (
-    <section id="features" className="py-20 px-4 md:px-6 bg-muted/30">
+    <section id="features" className="py-16 sm:py-20 px-4 md:px-6 bg-muted/30">
       <div className="container mx-auto max-w-6xl">
         <BlurFade delay={0.1}>
-          <div className="text-center space-y-4 mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold">Everything you need to build your network</h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+          <div className="text-center space-y-4 mb-12 sm:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold leading-tight text-balance">
+              Everything you need to build your network
+            </h2>
+            <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto text-balance">
               Powerful features designed to help you connect with the right people at the right time.
             </p>
           </div>

@@ -218,15 +218,15 @@ function ContactsContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Contacts</h1>
-          <p className="text-muted-foreground">Manage your networking pipeline</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold leading-tight">Contacts</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage your networking pipeline</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline">
+              <Button variant="outline" className="w-full sm:w-auto">
                 <Upload className="mr-2 h-4 w-4" />
                 Import CSV
               </Button>
@@ -256,7 +256,7 @@ function ContactsContent() {
 
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="w-full sm:w-auto">
                 <Plus className="mr-2 h-4 w-4" />
                 Add Contact
               </Button>
@@ -267,7 +267,7 @@ function ContactsContent() {
                 <DialogDescription>Enter the contact details to add them to your pipeline.</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <Label htmlFor="name">Name</Label>
                       <Input
@@ -287,7 +287,7 @@ function ContactsContent() {
                       />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <Label htmlFor="role">Role</Label>
                       <Input
@@ -325,7 +325,7 @@ function ContactsContent() {
                     onChange={(event) => setFormState((prev) => ({ ...prev, email: event.target.value }))}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <Label htmlFor="phone">Phone (optional)</Label>
                     <Input
@@ -380,14 +380,14 @@ function ContactsContent() {
         {columns.map((column) => (
           <div
             key={column.id}
-            className="flex flex-col gap-4"
+            className="flex flex-col gap-4 rounded-xl border border-border/60 bg-card/60 p-4"
             onDragOver={handleDragOver}
             onDrop={() => handleDrop(column.id)}
           >
             {/* Column Header */}
             <div className="flex items-center gap-2">
-              <div className={`h-2 w-2 rounded-full ${column.color}`} />
-              <h3 className="font-semibold">{column.title}</h3>
+              <div className={`h-2.5 w-2.5 rounded-full ${column.color}`} />
+              <h3 className="font-semibold tracking-tight">{column.title}</h3>
               <Badge variant="secondary" className="ml-auto">
                 {contactsByStage[column.id].length}
               </Badge>

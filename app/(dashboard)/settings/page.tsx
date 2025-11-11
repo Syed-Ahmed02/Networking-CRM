@@ -211,28 +211,33 @@ function SettingsContent() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">Manage your account and integrations</p>
+      <div className="space-y-1">
+        <h1 className="text-3xl font-bold leading-tight">Settings</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">Manage your account and integrations</p>
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="integrations">Integrations</TabsTrigger>
-          <TabsTrigger value="import">Import Data</TabsTrigger>
+        <TabsList className="flex flex-wrap gap-2">
+          <TabsTrigger value="profile" className="flex-1 sm:flex-none">
+            Profile
+          </TabsTrigger>
+          <TabsTrigger value="integrations" className="flex-1 sm:flex-none">
+            Integrations
+          </TabsTrigger>
+          <TabsTrigger value="import" className="flex-1 sm:flex-none">
+            Import Data
+          </TabsTrigger>
         </TabsList>
 
         {/* Profile Settings */}
         <TabsContent value="profile" className="space-y-6">
-          <Card>
+          <Card className="border-border/70">
             <CardHeader>
               <CardTitle>Profile Information</CardTitle>
               <CardDescription>Update your personal information and preferences</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center gap-4">
+              <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
                 <Avatar className="h-20 w-20">
                   <AvatarImage src={user?.avatar || "/placeholder.svg?height=80&width=80"} />
                   <AvatarFallback className="text-2xl">
@@ -240,15 +245,13 @@ function SettingsContent() {
                     {(user?.lastName || "S")[0]}
                   </AvatarFallback>
                 </Avatar>
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    Avatar is synced from your authentication provider.
-                  </p>
-                </div>
+                <p className="text-sm text-muted-foreground">
+                  Avatar is synced from your authentication provider.
+                </p>
               </div>
 
               <div className="grid gap-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <Label htmlFor="firstName">First Name</Label>
                     <Input
@@ -331,8 +334,12 @@ function SettingsContent() {
                 </div>
               </div>
 
-              <div className="flex justify-end">
-                <Button onClick={handleSaveProfile} disabled={isSavingProfile || isProfileLoading}>
+              <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  onClick={handleSaveProfile}
+                  disabled={isSavingProfile || isProfileLoading}
+                  className="w-full sm:w-auto"
+                >
                   {isSavingProfile ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -349,9 +356,9 @@ function SettingsContent() {
 
         {/* Integrations */}
         <TabsContent value="integrations" className="space-y-6">
-          <Card>
+          <Card className="border-border/70">
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
                     <SearchIcon className="h-6 w-6 text-primary" />
@@ -375,8 +382,8 @@ function SettingsContent() {
                   <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-4 text-sm text-green-600">
                     Apollo is connected and ready to use.
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={handleDisconnectApollo}>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button variant="outline" onClick={handleDisconnectApollo} className="w-full sm:w-auto">
                       Disconnect
                     </Button>
                   </div>
@@ -397,7 +404,11 @@ function SettingsContent() {
                       disabled={isIntegrationLoading}
                     />
                   </div>
-                  <Button onClick={handleConnectApollo} disabled={isConnectingApollo || isIntegrationLoading}>
+                  <Button
+                    onClick={handleConnectApollo}
+                    disabled={isConnectingApollo || isIntegrationLoading}
+                    className="w-full sm:w-auto"
+                  >
                     {isConnectingApollo ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -415,9 +426,9 @@ function SettingsContent() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-border/70">
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-500/10">
                     <CalendarIcon className="h-6 w-6 text-blue-600" />
@@ -441,8 +452,8 @@ function SettingsContent() {
                   <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-4 text-sm text-green-600">
                     Google Calendar is connected and syncing meetings.
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={handleDisconnectGoogle}>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button variant="outline" onClick={handleDisconnectGoogle} className="w-full sm:w-auto">
                       Disconnect
                     </Button>
                   </div>
@@ -452,7 +463,11 @@ function SettingsContent() {
                   <p className="text-sm text-muted-foreground">
                     Connect Google Calendar to sync CRM meetings and stay aligned with your schedule.
                   </p>
-                  <Button onClick={handleConnectGoogle} disabled={isConnectingGoogle || isIntegrationLoading}>
+                  <Button
+                    onClick={handleConnectGoogle}
+                    disabled={isConnectingGoogle || isIntegrationLoading}
+                    className="w-full sm:w-auto"
+                  >
                     {isConnectingGoogle ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -473,7 +488,7 @@ function SettingsContent() {
 
         {/* Import Data */}
         <TabsContent value="import" className="space-y-6">
-          <Card>
+          <Card className="border-border/70">
             <CardHeader>
               <CardTitle>Import Contacts from CSV</CardTitle>
               <CardDescription>Upload a CSV file to log contact imports</CardDescription>
@@ -512,7 +527,7 @@ function SettingsContent() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-border/70">
             <CardHeader>
               <CardTitle>Import History</CardTitle>
               <CardDescription>Recent import activity</CardDescription>

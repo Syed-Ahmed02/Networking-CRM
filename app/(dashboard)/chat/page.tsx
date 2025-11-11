@@ -10,13 +10,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { DataTable } from '@/components/ui/data-table'
 import { DashboardAuthBoundary } from '../DashboardAuthBoundary'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { toast } from 'sonner'
-import type { ColumnDef } from '@tanstack/react-table'
 import { Id } from '@/convex/_generated/dataModel'
+import { DataTable } from '@/components/ui/data-table'
+import type { ColumnDef } from '@tanstack/react-table'
 
 export default function ChatPage() {
   return (
@@ -147,19 +147,16 @@ function ChatContent() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col">
-      {/* Header */}
-      <div className="mb-4">
-        <h1 className="text-3xl font-bold">AI Assistant</h1>
-        <p className="text-muted-foreground">
+    <div className="flex min-h-[calc(100vh-12rem)] flex-1 flex-col gap-4">
+      <div className="space-y-1">
+        <h1 className="text-3xl font-bold leading-tight">AI Assistant</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
           Research companies, find people, and get insights powered by AI
         </p>
       </div>
 
-      {/* Chat Container */}
-      <Card className="flex flex-1 flex-col overflow-hidden">
-        {/* Messages Area */}
-        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      <Card className="flex flex-1 flex-col overflow-hidden border-border/70">
+        <ScrollArea className="flex-1 p-4 sm:p-6" ref={scrollRef}>
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
               <div className="rounded-full bg-primary/10 p-4">
@@ -194,17 +191,16 @@ function ChatContent() {
           )}
         </ScrollArea>
 
-        {/* Input Area */}
-        <div className="border-t p-4">
-          <form onSubmit={handleSubmit} className="flex gap-2">
+        <div className="border-t border-border/60 bg-muted/30 p-4 sm:p-6">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask me anything about companies or people..."
               disabled={isLoading}
-              className="flex-1"
+              className="flex-1 text-sm sm:text-base"
             />
-            <Button type="submit" disabled={isLoading || !input.trim()}>
+            <Button type="submit" disabled={isLoading || !input.trim()} className="w-full sm:w-auto">
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -523,6 +519,15 @@ function PeopleSearchResult({ result }: { result: any }) {
     }
   }
 
+  const getSaveState = (person: PersonData, index: number) => {
+    const personId = `${person.linkedinUrl}-${index}`
+    return {
+      personId,
+      isSaving: savingIds.has(personId),
+      isSaved: savedIds.has(personId),
+    }
+  }
+
   const columns: ColumnDef<PersonData>[] = [
     {
       accessorKey: 'name',
@@ -545,9 +550,9 @@ function PeopleSearchResult({ result }: { result: any }) {
     {
       accessorKey: 'title',
       header: 'Title',
-      size: 200,
+      size: 220,
       cell: ({ row }) => (
-        <span className="text-sm text-muted-foreground truncate block" title={row.original.title}>
+        <span className="block truncate text-sm text-muted-foreground" title={row.original.title}>
           {row.original.title}
         </span>
       ),
@@ -555,9 +560,9 @@ function PeopleSearchResult({ result }: { result: any }) {
     {
       accessorKey: 'company',
       header: 'Company',
-      size: 150,
+      size: 180,
       cell: ({ row }) => (
-        <span className="text-sm truncate block" title={row.original.company}>
+        <span className="block truncate text-sm" title={row.original.company}>
           {row.original.company}
         </span>
       ),
@@ -565,31 +570,30 @@ function PeopleSearchResult({ result }: { result: any }) {
     {
       accessorKey: 'linkedinUrl',
       header: 'LinkedIn',
-      size: 80,
+      size: 100,
       cell: ({ row }) => {
         const url = row.original.linkedinUrl
-        return (
+        return url ? (
           <a
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-primary hover:underline inline-flex"
+            className="inline-flex items-center text-primary hover:underline"
           >
             <Linkedin className="h-4 w-4" />
           </a>
+        ) : (
+          <span className="text-xs text-muted-foreground">N/A</span>
         )
       },
     },
     {
       id: 'actions',
       header: 'Actions',
-      size: 120,
+      size: 140,
       cell: ({ row }) => {
         const person = row.original
-        const personId = `${person.linkedinUrl}-${row.index}`
-        const isSaving = savingIds.has(personId)
-        const isSaved = savedIds.has(personId)
-
+        const { isSaving, isSaved } = getSaveState(person, row.index)
         return (
           <Button
             size="sm"
@@ -637,7 +641,7 @@ function PeopleSearchResult({ result }: { result: any }) {
   const tableData: PersonData[] = people.map(parsePersonData)
 
   return (
-    <Card className="w-full">
+    <Card className="w-full border-border/70">
       <CardHeader>
         <div className="flex items-center gap-2">
           <Users className="h-5 w-5 text-primary" />
@@ -647,9 +651,11 @@ function PeopleSearchResult({ result }: { result: any }) {
           Found {totalFound} {totalFound === 1 ? 'person' : 'people'}
         </CardDescription>
       </CardHeader>
-      <CardContent className="overflow-hidden">
-        <div className="w-full overflow-hidden">
-          <DataTable columns={columns} data={tableData} />
+      <CardContent className="space-y-4">
+        <div className="-mx-1 ">
+          <div className="min-w-[680px] px-1">
+            <DataTable columns={columns} data={tableData} />
+          </div>
         </div>
       </CardContent>
     </Card>

@@ -40,7 +40,9 @@ export default async function DashboardLayout({
         </Suspense>
         <SidebarInset>
           <AppTopbar />
-          <main className="mt-16 p-6">{children}</main>
+          <div className="mt-16 flex-1 px-4 py-6 sm:px-6 lg:px-8">
+            <div className="mx-auto w-full max-w-[1200px]">{children}</div>
+          </div>
         </SidebarInset>
       </SidebarProvider>
     </DashboardAuthBoundary>

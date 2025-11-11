@@ -67,7 +67,7 @@ export function ContactCard({
     <Card
       draggable={draggable}
       onDragStart={handleDragStart}
-      className={`transition-shadow hover:shadow-lg ${onClick ? "cursor-pointer" : ""} ${draggable ? "cursor-move" : ""}`}
+      className={`w-full transition-shadow hover:shadow-lg ${onClick ? "cursor-pointer" : ""} ${draggable ? "cursor-move" : ""}`}
       onClick={handleClick}
     >
       <CardHeader className="p-4">

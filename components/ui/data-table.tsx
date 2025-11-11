@@ -59,7 +59,7 @@ export function DataTable<TData, TValue>({
   return (
     <div className="w-full overflow-hidden">
       <div className="rounded-md border overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="ooverflow-x-scroll ">
           <Table className="table-fixed w-full">
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (

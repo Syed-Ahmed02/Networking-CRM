@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { DashboardAuthBoundary } from "../DashboardAuthBoundary"
 import { FullScreenCalendar } from "@/components/ui/fullscreen-calendar"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 type ContactDoc = Doc<"contacts"> & {
   primaryEmail?: string | null
@@ -107,6 +108,7 @@ function CalendarContent() {
   const [selectedEventId, setSelectedEventId] = useState<Id<"calendarEvents"> | null>(null)
   const [scheduleForm, setScheduleForm] = useState<ScheduleFormState>(createInitialScheduleForm(new Date()))
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const isMobile = useIsMobile()
 
   const contactMap = useMemo(() => {
     const map = new Map<string, ContactDoc>()
@@ -239,6 +241,12 @@ function CalendarContent() {
     setCurrentDate(newDate)
   }
 
+  const goToToday = () => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    setCurrentDate(today)
+  }
+
   const getEventTypeIcon = (type: EventWithContact["type"]) => {
     switch (type) {
       case "video":
@@ -304,48 +312,92 @@ function CalendarContent() {
 
   return (
     <div className="space-y-6">
- 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+      <div className="space-y-1">
+        <h1 className="text-3xl font-bold leading-tight">Calendar</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
+          Stay on top of meetings, follow-ups, and conversations.
+        </p>
+      </div>
+
+      <Card className="border-border/70">
+        <CardHeader className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex overflow-hidden rounded-full border border-border/60 bg-muted/40 shadow-sm">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="icon"
+                className="rounded-none"
                 onClick={() => (view === "month" ? navigateMonth(-1) : navigateWeek(-1))}
               >
                 <ChevronLeft className="h-4 w-4" />
+                <span className="sr-only">Previous period</span>
               </Button>
-              <div className="text-lg font-semibold">
+              <span className="px-5 py-2 text-sm font-semibold">
                 {months[currentDate.getMonth()]} {currentDate.getFullYear()}
-              </div>
+              </span>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="icon"
+                className="rounded-none"
                 onClick={() => (view === "month" ? navigateMonth(1) : navigateWeek(1))}
               >
                 <ChevronRight className="h-4 w-4" />
+                <span className="sr-only">Next period</span>
               </Button>
             </div>
-            <div className="flex gap-2">
-              <Button variant={view === "day" ? "default" : "outline"} size="sm" onClick={() => setView("day")}>
-                Day
+            <div className="flex flex-1 items-center justify-end gap-2 sm:flex-none">
+              <Button variant="outline" size="sm" onClick={goToToday} className="w-full sm:w-auto">
+                Today
               </Button>
-              <Button variant={view === "week" ? "default" : "outline"} size="sm" onClick={() => setView("week")}>
-                Week
-              </Button>
-              <Button variant={view === "month" ? "default" : "outline"} size="sm" onClick={() => setView("month")}>
-                Month
-              </Button>
-              <Button variant={view === "fullscreen" ? "default" : "outline"} size="sm" onClick={() => setView("fullscreen")}>
-                Fullscreen
+              <Button
+                size="sm"
+                onClick={() => {
+                  setScheduleForm(createInitialScheduleForm(currentDate))
+                  setIsScheduleDialogOpen(true)
+                }}
+                className="w-full sm:w-auto"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New Event
               </Button>
             </div>
           </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {isMobile ? (
+              <Select
+                value={view}
+                onValueChange={(value: "day" | "week" | "month" | "fullscreen") => setView(value)}
+              >
+                <SelectTrigger className="w-full sm:w-56">
+                  <SelectValue placeholder="Select view" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="day">Day</SelectItem>
+                  <SelectItem value="week">Week</SelectItem>
+                  <SelectItem value="month">Month</SelectItem>
+                  <SelectItem value="fullscreen">Fullscreen</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="inline-flex overflow-hidden rounded-full border border-border/60 bg-muted/40 shadow-sm">
+                {(["day", "week", "month", "fullscreen"] as const).map((option) => (
+                  <Button
+                    key={option}
+                    variant={view === option ? "default" : "ghost"}
+                    className="rounded-none px-4 capitalize"
+                    onClick={() => setView(option)}
+                  >
+                    {option}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
           {view === "fullscreen" && (
-            <div className="flex h-[calc(100vh-300px)] min-h-[600px] flex-1 flex-col">
+            <div className="flex h-[calc(100vh-26rem)] min-h-[520px] flex-1 flex-col">
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
