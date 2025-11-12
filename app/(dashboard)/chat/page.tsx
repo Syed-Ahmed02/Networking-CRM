@@ -408,6 +408,8 @@ type PersonData = {
   company: string
   linkedinUrl: string
   headline?: string
+  email?: string
+  location?: string
 }
 
 function PeopleSearchResult({ result }: { result: any }) {
@@ -418,60 +420,52 @@ function PeopleSearchResult({ result }: { result: any }) {
 
   // Parse LinkedIn profile data to extract structured information
   const parsePersonData = (person: any): PersonData => {
-    const title = person.title || ''
-    const text = person.text || ''
-    
-    // Helper function to truncate text
     const truncate = (str: string, maxLength: number) => {
       if (!str || str.length <= maxLength) return str
-      return str.substring(0, maxLength).trim() + '...'
+      return str.substring(0, maxLength).trim() + '…'
     }
-    
-    // Extract name from title (usually first part before " - " or " | ")
-    // Filter out article titles (they're usually too long and don't follow name patterns)
-    let name = ''
-    const nameMatch = title.match(/^([^-|]+)/)
-    const potentialName = nameMatch ? nameMatch[1].trim() : title.split(' - ')[0]?.trim() || ''
-    
-    // Check if it looks like a person name (2-4 words, reasonable length)
-    const nameWords = potentialName.split(/\s+/)
-    if (nameWords.length >= 1 && nameWords.length <= 4 && potentialName.length <= 60) {
-      name = potentialName
-    } else {
-      // Try to extract from text if title doesn't work
-      const nameFromText = text.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})/)?.[1]
-      name = nameFromText && nameFromText.length <= 60 ? nameFromText : truncate(potentialName, 40)
-    }
-    
-    if (!name || name === 'Unknown') {
-      name = 'Unknown Person'
-    }
-    
-    // Extract title/role (usually after " - " or " | ")
-    const titleMatch = title.match(/[-|]\s*(.+)/)
-    let role = ''
-    if (titleMatch) {
-      role = titleMatch[1].trim()
-    } else {
-      // Try to extract role from text
-      const roleMatch = text.match(/(?:is|as|works as|position:)\s+([^.|,]+)/i)
-      role = roleMatch ? roleMatch[1].trim() : ''
-    }
-    
-    // Limit role length
-    role = truncate(role || title, 50)
-    
-    // Extract company from text or use the search company name
-    const companyMatch = text.match(/at\s+([^.|,]+)/i) || text.match(/@\s*([^.|,]+)/i)
-    let company = companyMatch?.[1]?.trim() || companyName || ''
-    company = truncate(company, 40)
-    
+
+    const stripMarkdown = (value: string) =>
+      value
+        .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+        .replace(/[#*_`>]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+
+    const resolvedName =
+      person.name ||
+      [person.firstName, person.lastName].filter(Boolean).join(' ') ||
+      'Unknown Person'
+
+    const resolvedRole = person.role || person.title || 'Unknown role'
+    const resolvedCompany = person.company || companyName || 'Unknown company'
+
+    const headline =
+      typeof person.headline === 'string' && person.headline.trim().length > 0
+        ? truncate(stripMarkdown(person.headline), 280)
+        : undefined
+
+    const primaryEmail = Array.isArray(person.emails)
+      ? [...person.emails]
+          .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+          .find((email) => email.isPrimary || email.position === 0)?.email
+      : undefined
+
+    const locationParts = [
+      person.location?.city,
+      person.location?.state,
+      person.location?.country,
+    ].filter(Boolean)
+    const location = locationParts.length ? locationParts.join(', ') : undefined
+
     return {
-      name: truncate(name, 40),
-      title: role,
-      company,
-      linkedinUrl: person.url || '',
-      headline: text,
+      name: truncate(resolvedName.trim(), 60),
+      title: truncate(resolvedRole.trim(), 80),
+      company: truncate(resolvedCompany.trim(), 80),
+      linkedinUrl: person.linkedinUrl || '',
+      headline,
+      email: primaryEmail,
+      location,
     }
   }
 

@@ -12,6 +12,7 @@
     "@ai-sdk/openai": "^2.0.64",
     "@ai-sdk/react": "^2.0.89",
     "@clerk/nextjs": "^6.34.1",
+    "@exalabs/ai-sdk": "^1.0.4",
     "@openrouter/ai-sdk-provider": "^1.2.0",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-dialog": "^1.1.15",

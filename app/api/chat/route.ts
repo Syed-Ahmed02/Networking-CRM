@@ -1,13 +1,13 @@
-import { streamText, convertToModelMessages, tool, UIMessage } from 'ai';
+import { streamText, convertToModelMessages, tool, stepCountIs } from 'ai';
 import { z } from 'zod';
 import { model } from '@/lib/ai/config';
 import {
   searchCompanyInfo,
-  searchPeopleAtCompany,
   findCompanyDomain,
   findSocialMediaProfiles,
 } from '@/lib/ai/exa-helpers';
-
+import { searchPeople } from '@/lib/ai/agents/people-search';
+import { webSearch } from "@exalabs/ai-sdk";
 export const maxDuration = 60; // Longer timeout for agent operations
 
 /**
@@ -16,47 +16,23 @@ export const maxDuration = 60; // Longer timeout for agent operations
  */
 export async function POST(req: Request) {
   try {
-    const { messages }: { messages: UIMessage[] } = await req.json();
+    const { messages }: { messages: any[] } = await req.json();
 
     // Create tools for the AI to use
     const tools = {
-      researchCompany: tool({
-        description:
-          'Research a company and get comprehensive information including domain, social media, industry, and key people',
-        inputSchema: z.object({
-          companyName: z.string().min(1).describe('The name of the company to research'),
-          additionalContext: z
-            .string()
-            .describe('Additional context like industry or location (optional)')
-            .optional(),
-        }),
-        execute: async ({ companyName, additionalContext }) => {
-          try {
-            const [companyInfo, domainInfo, socialMedia] = await Promise.all([
-              searchCompanyInfo(companyName, additionalContext),
-              findCompanyDomain(companyName),
-              findSocialMediaProfiles(companyName),
-            ]);
-
-            return {
-              success: true,
-              companyName,
-              data: {
-                companyInfo: companyInfo.results.slice(0, 3),
-                domain: domainInfo.results[0]?.domain,
-                socialMedia: socialMedia.results,
-              },
-            };
-          } catch (error) {
-            return {
-              success: false,
-              error: error instanceof Error ? error.message : String(error),
-            };
-          }
+      webSearch: webSearch({
+        type: "auto",                           // smart search
+        numResults: 6,                          // get up to 6 results
+        category: "company",                    // focus on companies
+        contents: {
+          text: { maxCharacters: 1000 },        // get up to 1000 chars per result
+          livecrawl: "preferred",               // always get fresh content if possible
+          summary: true,                        // get an AI summary for each result
         },
       }),
       searchPeople: tool({
-        description: 'Search for people working at a specific company, particularly on LinkedIn',
+        description:
+          'Search for people at a company using Apollo filters (title, location, seniority).',
         inputSchema: z.object({
           companyName: z.string().min(1).describe('The company name to search for people'),
           role: z
@@ -74,12 +50,18 @@ export async function POST(req: Request) {
         execute: async ({ companyName, role, numResults }) => {
           try {
             const count = numResults ?? 10;
-            const result = await searchPeopleAtCompany(companyName, role, count);
+            const result = await searchPeople({
+              companyName,
+              role,
+              numResults: count,
+              includeCompanyInfo: true,
+            });
             return {
               success: true,
               companyName,
-              people: result.results.slice(0, count),
+              people: result.people.slice(0, count),
               totalFound: result.totalFound,
+              companyInfo: result.companyInfo,
             };
           } catch (error) {
             return {
@@ -98,14 +80,14 @@ export async function POST(req: Request) {
       system: `You are an AI assistant for CoffeeAgent.AI, a professional networking platform. You help users research companies, find people, and generate outreach emails.
 
 Your capabilities:
-1. Research companies - Get comprehensive information about companies including their domain, social media, industry, and key people
-2. Search for people - Find people working at specific companies, optionally filtered by role
-3. Generate emails - Create personalized outreach emails (coming soon)
+1. Web Search - Search the web for information about companies and people
+2. Search People - Search for people at a company using Apollo filters (title, location, seniority)
 
-When a user asks about a company or wants to find people, use the appropriate tools to gather real-time information from the web using Exa search.
+When a user asks about a company or wants to find people, use the appropriate tools to gather real-time information. Company research uses Exa search helpers, while people search uses the Apollo database.
 
 Be helpful, concise, and provide actionable insights. Format your responses clearly with proper markdown.`,
-    });
+    stopWhen: stepCountIs(5),
+  });
 
     return result.toUIMessageStreamResponse();
   } catch (error) {
@@ -116,3 +98,4 @@ Be helpful, concise, and provide actionable insights. Format your responses clea
     );
   }
 }
+

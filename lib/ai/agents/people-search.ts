@@ -1,16 +1,8 @@
-/**
- * People Search Agent
- * Finds people at a specific company using Exa and AI
- */
-
-import { generateText } from 'ai';
-import { model } from '../config';
-import { PeopleSearchSchema, type PeopleSearchResult } from '../types';
 import {
-  searchPeopleAtCompany,
-  searchCompanyInfo,
-  findCompanyDomain,
-} from '../exa-helpers';
+  runApolloPeopleSearch,
+  type ApolloPeopleSearchResult,
+} from './apolloAgent';
+import { PeopleSearchSchema, type PeopleSearchResult } from '../types';
 
 export interface PeopleSearchInput {
   companyName: string;
@@ -20,14 +12,12 @@ export interface PeopleSearchInput {
 }
 
 /**
- * Search for people at a specific company
- * 
- * This agent:
- * 1. Searches LinkedIn and other professional networks for people at the company
- * 2. Extracts structured information about each person
- * 3. Optionally includes company information
- * 4. Returns data matching the Convex contacts schema
- * 
+ * Search for people at a specific company via Apollo.
+ *
+ * 1. Calls the Apollo mixed_people/search endpoint through the shared tool
+ * 2. Normalises the response to the Convex-compatible PeopleSearch schema
+ * 3. Optionally attempts to include company domain information
+ *
  * @param input - People search parameters
  * @returns Structured people search results
  */
@@ -42,93 +32,80 @@ export async function searchPeople(
   } = input;
 
   try {
-    // Gather information from multiple sources
-    const peopleResults = await searchPeopleAtCompany(companyName, role, numResults);
-    
-    let companyInfo = null;
-    let domainInfo = null;
-    
-    if (includeCompanyInfo) {
-      [companyInfo, domainInfo] = await Promise.all([
-        searchCompanyInfo(companyName),
-        findCompanyDomain(companyName),
-      ]);
-    }
-
-    // Combine all search results
-    const allResults = {
-      people: peopleResults,
-      ...(includeCompanyInfo && { companyInfo, domainInfo }),
-    };
-
-    // Use AI to extract and structure the information
-    const result = await generateText({
-      model,
-      prompt: `You are a people search agent. Based on the following search results for people at "${companyName}"${role ? ` in ${role} roles` : ''}, extract and format the information as a JSON object.
-
-SEARCH RESULTS:
-${JSON.stringify(allResults, null, 2)}
-
-REQUIRED JSON SCHEMA:
-{
-  "people": [
-    {
-      "name": "string (full name)",
-      "firstName": "string (optional, first name)",
-      "lastName": "string (optional, last name)",
-      "company": "string (should be ${companyName})",
-      "role": "string (job title)",
-      "headline": "string (optional, professional headline/bio)",
-      "linkedinUrl": "string (optional, LinkedIn profile URL)",
-      "twitterUrl": "string (optional, Twitter/X profile URL)",
-      "avatar": "string (optional, profile picture URL)",
-      "location": {
-        "city": "string (optional)",
-        "state": "string (optional)",
-        "country": "string (optional)",
-        "timeZone": "string (optional)"
-      },
-      "emails": [
-        {
-          "email": "string",
-          "isPrimary": "boolean (true for first email, false for others)",
-          "position": "number (0, 1, 2, etc.)"
-        }
-      ]
-    }
-  ],
-  ${includeCompanyInfo ? `"companyInfo": {
-    "name": "string (company name)",
-    "domain": "string (primary domain without www)",
-    "websiteUrl": "string (optional)",
-    "linkedinUrl": "string (optional)",
-    "industry": "string (optional)"
-  },` : ''}
-  "totalFound": "number (total number of people found)"
-}
-
-INSTRUCTIONS:
-1. Extract information for each person found in the search results
-2. Split full names into firstName and lastName if possible
-3. Extract LinkedIn URLs, roles, and any other available information
-4. If emails are found, format them with isPrimary and position fields
-5. ${includeCompanyInfo ? 'Extract company information from the search results' : 'Omit companyInfo field'}
-6. Set totalFound to the actual number of people extracted
-7. If information is not available, omit those fields
-8. Ensure LinkedIn URLs are properly formatted
-
-Return ONLY a valid JSON object matching the schema above. Do not include any other text or explanation.`,
+    const searchResponse = await runApolloPeopleSearch({
+      personTitles: role ? [role] : undefined,
+      includeSimilarTitles: true,
+      qKeywords: companyName,
+      perPage: Math.min(numResults, 200),
+      page: 1,
     });
 
-    // Parse the JSON response
-    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Failed to extract JSON from AI response');
-    }
+    type ApolloContact = ApolloPeopleSearchResult['contacts'][number];
 
-    const parsed = JSON.parse(jsonMatch[0]);
-    const validated = PeopleSearchSchema.parse(parsed);
-    return validated;
+    const contacts = (searchResponse.contacts ?? []).filter(
+      (contact: ApolloContact) => typeof contact.name === 'string' && contact.name.trim().length > 0
+    );
+
+    const people = contacts.map((contact: ApolloContact) => {
+      const nameParts = contact.name?.trim().split(/\s+/) ?? [];
+      const [firstName, ...lastParts] = nameParts;
+      const lastName = lastParts.length ? lastParts.join(' ') : undefined;
+
+      return {
+        name: contact.name,
+        ...(firstName ? { firstName } : {}),
+        ...(lastName ? { lastName } : {}),
+        company: contact.organizationName ?? companyName,
+        role: contact.title ?? '',
+        headline: contact.headline ?? undefined,
+        linkedinUrl: contact.linkedinUrl ?? undefined,
+        location: contact.location
+          ? {
+              city: contact.location,
+            }
+          : undefined,
+        emails: contact.email
+          ? [
+              {
+                email: contact.email,
+                isPrimary: true,
+                position: 0,
+              },
+            ]
+          : undefined,
+      };
+    });
+
+    const limitedPeople = people.slice(0, numResults);
+
+    const domainBreadcrumb = searchResponse.breadcrumbs?.find(
+      (breadcrumb: any) => breadcrumb?.signal_field_name === 'q_organization_domains_list'
+    );
+    const domainValue = Array.isArray(domainBreadcrumb?.value)
+      ? domainBreadcrumb.value[0]
+      : typeof domainBreadcrumb?.value === 'string'
+        ? domainBreadcrumb.value
+        : undefined;
+
+    const result = {
+      people: limitedPeople,
+      companyInfo:
+        includeCompanyInfo && domainValue
+          ? {
+              name: companyName,
+              domain: domainValue,
+              websiteUrl: `https://${domainValue}`,
+              linkedinUrl: undefined,
+              industry: undefined,
+            }
+          : undefined,
+      totalFound:
+        searchResponse.pagination?.total_entries ??
+        searchResponse.pagination?.totalEntries ??
+        contacts.length,
+    };
+
+    return PeopleSearchSchema.parse(result);
   } catch (error) {
     console.error('People search error:', error);
     throw new Error(`Failed to search for people: ${error instanceof Error ? error.message : String(error)}`);
