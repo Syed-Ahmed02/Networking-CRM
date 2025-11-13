@@ -99,7 +99,6 @@ function ChatContent() {
   // Save chat history when conversation ends (user sends a new message or conversation completes)
   useEffect(() => {
     if (messages.length > 0 && !isLoading) {
-      // Extract tool results from messages
       const toolResults = messages
         .filter((msg) => msg.role === 'assistant')
         .flatMap((msg) =>
@@ -113,7 +112,6 @@ function ChatContent() {
             })) || []
         )
 
-      // Save chat history (debounced to avoid too many saves)
       const timeoutId = setTimeout(() => {
         saveChatHistory({
           messages: messages.map((msg) => ({
