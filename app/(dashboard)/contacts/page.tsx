@@ -2,13 +2,12 @@
 
 import type React from "react"
 
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { Plus, Upload, Loader2 } from "lucide-react"
 import { useMutation, useQuery } from "convex/react"
 import { api } from "@/convex/_generated/api"
-import type { Doc, Id } from "@/convex/_generated/dataModel"
+import type { Id } from "@/convex/_generated/dataModel"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
   DialogContent,
@@ -22,28 +21,21 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { DashboardAuthBoundary } from "../DashboardAuthBoundary"
-import { ContactCard } from "@/components/contact-card"
 import { EditContactDialog } from "@/components/edit-contact-dialog"
 import { ContactDetailDialog } from "@/components/contact-detail-dialog"
-
-type Stage = Doc<"contacts">["stage"]
-
-type ContactWithDetails = Doc<"contacts"> & {
-  primaryEmail: string | null
-  primaryPhone: string | null
-  emails: Doc<"contactEmails">[]
-  phones: Doc<"contactPhones">[]
-}
-
-type Column = Stage
+import { ContactsKanbanBoard } from "@/components/contacts-kanban-board"
+import { ContactsListView } from "@/components/contacts-list-view"
+import { ContactsTableView } from "@/components/contacts-table-view"
+import type { Column, ContactWithDetails, ContactsByStage, Stage as ContactStage } from "@/lib/contacts/types"
 
 type ContactFormState = {
   name: string
   company: string
   role: string
-  stage: Stage
+  stage: ContactStage
   email: string
   phone: string
   linkedin: string
@@ -68,6 +60,8 @@ const columns: { id: Column; title: string; color: string }[] = [
   { id: "closed", title: "Closed", color: "bg-green-500" },
 ]
 
+type ContactsView = "kanban" | "list" | "table"
+
 export default function ContactsPage() {
   return (
     <DashboardAuthBoundary>
@@ -87,14 +81,16 @@ function ContactsContent() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [draggedContact, setDraggedContact] = useState<{ contactId: Id<"contacts">; fromColumn: Column } | null>(null)
+  const [activeView, setActiveView] = useState<ContactsView>("table")
 
   const [formState, setFormState] = useState(initialFormState)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const isLoading = contacts === undefined
+  const typedContacts = (contacts as ContactWithDetails[]) ?? []
 
-  const contactsByStage = useMemo(() => {
-    const base: Record<Stage, ContactWithDetails[]> = {
+  const contactsByStage = useMemo<ContactsByStage>(() => {
+    const base: ContactsByStage = {
       lead: [],
       contacted: [],
       meeting: [],
@@ -117,6 +113,22 @@ function ContactsContent() {
     return (contacts as ContactWithDetails[]).find((contact) => contact._id === viewingContactId) ?? null
   }, [contacts, viewingContactId])
 
+  const moveContact = useCallback(
+    async ({ contactId, fromColumn, toColumn }: { contactId: Id<"contacts">; fromColumn: Column; toColumn: Column }) => {
+      if (fromColumn === toColumn) return
+
+      try {
+        await updateContactStage({ contactId, stage: toColumn })
+      } catch (error) {
+        console.error(error)
+        toast("Unable to move contact", {
+          description: error instanceof Error ? error.message : "Please try again.",
+        })
+      }
+    },
+    [updateContactStage],
+  )
+
   const handleDragStart = (contactId: Id<"contacts">) => {
     const contact = contacts?.find((c) => c._id === contactId)
     if (contact) {
@@ -133,20 +145,11 @@ function ContactsContent() {
 
     const { contactId, fromColumn } = draggedContact
 
-    if (fromColumn === toColumn) {
-      setDraggedContact(null)
-      return
-    }
-
     try {
-      await updateContactStage({ contactId, stage: toColumn })
-    } catch (error) {
-      console.error(error)
-      toast("Unable to move contact", {
-        description: error instanceof Error ? error.message : "Please try again.",
-      })
+      await moveContact({ contactId, fromColumn, toColumn })
+    } finally {
+      setDraggedContact(null)
     }
-    setDraggedContact(null)
   }
 
   const handleAddContact = async () => {
@@ -301,7 +304,9 @@ function ContactsContent() {
                     <Label htmlFor="stage">Stage</Label>
                       <Select
                         value={formState.stage}
-                        onValueChange={(value: Stage) => setFormState((prev) => ({ ...prev, stage: value }))}
+                        onValueChange={(value) =>
+                          setFormState((prev) => ({ ...prev, stage: value as ContactStage }))
+                        }
                       >
                         <SelectTrigger id="stage">
                           <SelectValue />
@@ -375,52 +380,48 @@ function ContactsContent() {
         </div>
       </div>
 
-      {/* Kanban Board */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {columns.map((column) => (
-          <div
-            key={column.id}
-            className="flex flex-col gap-4 rounded-xl border border-border/60 bg-card/60 p-4"
-            onDragOver={handleDragOver}
-            onDrop={() => handleDrop(column.id)}
-          >
-            {/* Column Header */}
-            <div className="flex items-center gap-2">
-              <div className={`h-2.5 w-2.5 rounded-full ${column.color}`} />
-              <h3 className="font-semibold tracking-tight">{column.title}</h3>
-              <Badge variant="secondary" className="ml-auto">
-                {contactsByStage[column.id].length}
-              </Badge>
-            </div>
+      <Tabs value={activeView} onValueChange={(value) => setActiveView(value as ContactsView)} className="space-y-4">
+        <TabsList>
+          {/* <TabsTrigger value="list">List</TabsTrigger> */}
+          <TabsTrigger value="table">Table</TabsTrigger>
+          <TabsTrigger value="kanban">Kanban</TabsTrigger>
 
-            {/* Contact Cards */}
-            <div className="space-y-3">
-              {isLoading ? (
-                <div className="flex items-center justify-center rounded-lg border py-10 text-sm text-muted-foreground">
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Loading contacts...
-                </div>
-              ) : contactsByStage[column.id].length === 0 ? (
-                <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-                  No contacts in this stage yet.
-                </div>
-              ) : (
-                contactsByStage[column.id].map((contact) => (
-                  <ContactCard
-                    key={contact._id}
-                    contact={contact}
-                    draggable
-                    onDragStart={() => handleDragStart(contact._id)}
-                    onClick={(contactId) => setViewingContactId(contactId)}
-                    onEdit={(contactId) => setEditingContactId(contactId)}
-                    onDelete={(contactId) => setEditingContactId(contactId)}
-                  />
-                ))
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+        </TabsList>
+        <TabsContent value="table" className="space-y-4">
+          <ContactsTableView
+            contacts={typedContacts}
+            isLoading={isLoading}
+            onContactClick={(contactId) => setViewingContactId(contactId)}
+            onContactEdit={(contactId) => setEditingContactId(contactId)}
+            onContactDelete={(contactId) => setEditingContactId(contactId)}
+          />
+        </TabsContent>
+        <TabsContent value="kanban" className="space-y-4">
+          <ContactsKanbanBoard
+            columns={columns}
+            contactsByStage={contactsByStage}
+            isLoading={isLoading}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            onDragStart={handleDragStart}
+            onContactClick={(contactId) => setViewingContactId(contactId)}
+            onContactEdit={(contactId) => setEditingContactId(contactId)}
+            onContactDelete={(contactId) => setEditingContactId(contactId)}
+          />
+        </TabsContent>
+        {/* <TabsContent value="list" className="space-y-4">
+          <ContactsListView
+            columns={columns}
+            contactsByStage={contactsByStage}
+            isLoading={isLoading}
+            onMoveContact={moveContact}
+            onContactClick={(contactId) => setViewingContactId(contactId)}
+            onContactEdit={(contactId) => setEditingContactId(contactId)}
+            onContactDelete={(contactId) => setEditingContactId(contactId)}
+          />
+        </TabsContent> */}
+        
+      </Tabs>
 
       {/* Contact Detail Dialog */}
       <ContactDetailDialog

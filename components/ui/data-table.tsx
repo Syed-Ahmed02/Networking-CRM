@@ -26,11 +26,17 @@ import {
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
+  onTableReady?: (table: ReturnType<typeof useReactTable<TData>>) => void
+  globalFilter?: string
+  globalFilterFn?: (row: any, columnId: string, filterValue: string) => boolean
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
+  onTableReady,
+  globalFilter,
+  globalFilterFn,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -48,19 +54,27 @@ export function DataTable<TData, TValue>({
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
+    globalFilterFn: globalFilterFn,
     state: {
       sorting,
       columnFilters,
       columnVisibility,
       rowSelection,
+      globalFilter,
     },
   })
 
+  React.useEffect(() => {
+    if (onTableReady) {
+      onTableReady(table)
+    }
+  }, [table, onTableReady])
+
   return (
-    <div className="w-full overflow-hidden">
+    <div className="w-full">
       <div className="rounded-md border overflow-hidden">
-        <div className="ooverflow-x-scroll ">
-          <Table className="table-fixed w-full">
+        <div className="overflow-x-auto">
+          <Table className="w-full min-w-max">
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
@@ -69,8 +83,8 @@ export function DataTable<TData, TValue>({
                     return (
                       <TableHead 
                         key={header.id}
-                        style={size ? { width: size, maxWidth: size } : undefined}
-                        className="overflow-hidden"
+                        style={size ? { width: size, minWidth: size } : undefined}
+                        className="whitespace-nowrap"
                       >
                         {header.isPlaceholder
                           ? null
@@ -96,8 +110,8 @@ export function DataTable<TData, TValue>({
                       return (
                         <TableCell 
                           key={cell.id}
-                          style={size ? { width: size, maxWidth: size } : undefined}
-                          className="overflow-hidden"
+                          style={size ? { width: size, minWidth: size } : undefined}
+                          className="whitespace-nowrap"
                         >
                           {flexRender(
                             cell.column.columnDef.cell,

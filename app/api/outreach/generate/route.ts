@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { generateOutreachEmail } from '@/lib/ai/agents/email-outreach';
+import { generateOutreachEmail } from '@/lib/ai/emailOutreach';
 import { auth } from '@clerk/nextjs/server';
 
 export const maxDuration = 60;
